@@ -30,9 +30,8 @@ class VideoRenderer;
 }  // namespace cricket
 
 class Conductor
-  : public webrtc::PeerConnectionObserver,
+    : public webrtc::PeerConnectionObserver,
     public webrtc::CreateSessionDescriptionObserver,
-    public PeerConnectionClientObserver,
     public rtc::MessageHandler {
  public:
   enum CallbackID {
@@ -49,6 +48,14 @@ class Conductor
 
   virtual void Close();
 
+  
+  void OnSignedIn();
+  void OnDisconnected();
+  void OnPeerConnected(int id, const std::string& name);
+  void OnPeerDisconnected(int id);
+  void OnMessageFromPeer(int peer_id, const std::string& message);
+  void OnServerConnectionFailure();
+  
  protected:
   ~Conductor();
   bool InitializePeerConnection();
@@ -79,25 +86,6 @@ class Conductor
   void OnIceCandidate(const webrtc::IceCandidateInterface* candidate) override;
   void OnIceConnectionReceivingChange(bool receiving) override {}
 
-  //
-  // PeerConnectionClientObserver implementation.
-  //
-
-  void OnSignedIn() override;
-
-  void OnDisconnected() override;
-
-  void OnPeerConnected(int id, const std::string& name) override;
-
-  void OnPeerDisconnected(int id) override;
-
-  void OnMessageFromPeer(int peer_id, const std::string& message) override;
-
-  void OnMessageSent(int err) override;
-
-  void OnServerConnectionFailure() override;
-
-
 
   // CreateSessionDescriptionObserver implementation.
   void OnSuccess(webrtc::SessionDescriptionInterface* desc) override;
@@ -109,7 +97,8 @@ class Conductor
  protected:
   // Send a message to the remote peer.
   void SendMessage(const std::string& json_object);
-
+  bool SendToPeer(const std::string& message);
+    
   int peer_id_;
   bool loopback_;
   rtc::scoped_refptr<webrtc::PeerConnectionInterface> peer_connection_;

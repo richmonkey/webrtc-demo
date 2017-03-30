@@ -69,7 +69,6 @@ Conductor::Conductor(PeerConnectionClient* client, rtc::Thread* main_thread)
     loopback_(false),
     client_(client),
     main_thread_(main_thread) {
-    client_->RegisterObserver(this);
     
     _networkThread = rtc::Thread::CreateWithSocketServer();
     bool result = _networkThread->Start();
@@ -84,7 +83,7 @@ Conductor::Conductor(PeerConnectionClient* client, rtc::Thread* main_thread)
     _signalingThread = rtc::Thread::Create();
     result = _signalingThread->Start();
 
-    client_->Connect(GetPeerName());
+
 }
 
 Conductor::~Conductor() {
@@ -96,7 +95,6 @@ bool Conductor::connection_active() const {
 }
 
 void Conductor::Close() {
-  client_->SignOut();
   DeletePeerConnection();
 }
 
@@ -184,13 +182,15 @@ void Conductor::OnAddStream(
     rtc::scoped_refptr<webrtc::MediaStreamInterface> stream) {
   LOG(INFO) << __FUNCTION__ << " " << stream->label();
 
+  this->AddRef();
   main_thread_->Post(RTC_FROM_HERE, this, NEW_STREAM_ADDED, new MessageData(stream.release()));
 }
 
 void Conductor::OnRemoveStream(
     rtc::scoped_refptr<webrtc::MediaStreamInterface> stream) {
   LOG(INFO) << __FUNCTION__ << " " << stream->label();
-
+  
+  this->AddRef();
   main_thread_->Post(RTC_FROM_HERE, this, STREAM_REMOVED, new MessageData(stream.release()));
 }
 
@@ -239,6 +239,7 @@ void Conductor::OnPeerDisconnected(int id) {
   LOG(INFO) << __FUNCTION__;
   if (id == peer_id_) {
     LOG(INFO) << "Our peer disconnected";
+    this->AddRef();
     main_thread_->Post(RTC_FROM_HERE, this, PEER_CONNECTION_CLOSED, NULL);
   }
 }
@@ -253,7 +254,6 @@ void Conductor::OnMessageFromPeer(int peer_id, const std::string& message) {
 
     if (!InitializePeerConnection()) {
       LOG(LS_ERROR) << "Failed to initialize our PeerConnection instance";
-      client_->SignOut();
       return;
     }
   } else if (peer_id != peer_id_) {
@@ -280,7 +280,6 @@ void Conductor::OnMessageFromPeer(int peer_id, const std::string& message) {
       if (!ReinitializePeerConnectionForLoopback()) {
         LOG(LS_ERROR) << "Failed to initialize our PeerConnection instance";
         DeletePeerConnection();
-        client_->SignOut();
       }
       return;
     }
@@ -338,10 +337,6 @@ void Conductor::OnMessageFromPeer(int peer_id, const std::string& message) {
   }
 }
 
-void Conductor::OnMessageSent(int err) {
-  // Process the next pending message if any.
-  main_thread_->Post(RTC_FROM_HERE, this, SEND_MESSAGE_TO_PEER, NULL);
-}
 
 void Conductor::OnServerConnectionFailure() {
     LOG(INFO) << "Failed to connect to server";
@@ -437,16 +432,12 @@ void Conductor::OnMessage(rtc::Message* msg) {
           if (!pending_messages_.empty()) {
               msg = pending_messages_.front();
               pending_messages_.pop_front();
-       
-              if (!client_->SendToPeer(peer_id_, *msg) && peer_id_ != -1) {
+              
+              if (!this->SendToPeer(*msg)) {
                   LOG(LS_ERROR) << "SendToPeer failed";
               }
               delete msg;
           }
-       
-          if (!peer_connection_.get())
-              peer_id_ = -1;
-       
           break;
       }
        
@@ -470,9 +461,25 @@ void Conductor::OnMessage(rtc::Message* msg) {
       default:
           RTC_NOTREACHED();
           break;
-
-
     }
+
+    this->Release();
+}
+
+bool Conductor::SendToPeer(const std::string& message) {
+  Json::Reader reader;
+  Json::Value value;
+
+  if (!reader.parse(message, value)) {
+      return false;
+  }
+
+  Json::Value json;
+  json["p2p"] = value;
+  std::string s = rtc::JsonValueToString(json);
+
+  client_->SendRTMessage(peer_id_, s);
+  return true;
 }
 
 void Conductor::OnSuccess(webrtc::SessionDescriptionInterface* desc) {
@@ -510,4 +517,5 @@ void Conductor::OnFailure(const std::string& error) {
 
 void Conductor::SendMessage(const std::string& json_object) {
   std::string* msg = new std::string(json_object);
+  this->AddRef();
   main_thread_->Post(RTC_FROM_HERE, this, SEND_MESSAGE_TO_PEER, new MessageData(msg));}

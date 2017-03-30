@@ -87,8 +87,6 @@ const int kReconnectDelay = 2000;
 // heartbeat 
 const int kHeartbeatDelay = 10*1000;
 
-//ping peer
-const int kPingDelay = 1000;
 
 rtc::AsyncSocket* CreateClientSocket(int family) {
 #ifdef WIN32
@@ -139,18 +137,15 @@ public:
 
 
 PeerConnectionClient::PeerConnectionClient()
-  : callback_(NULL),
-    resolver_(NULL),
+  : resolver_(NULL),
     state_(NOT_CONNECTED),
     my_id_(-1) {
-
+    
     data_size_ = 0;
     offset_ = 0;
     size_ = 0;
 
     seq_ = 0;
-    
-    token_ = "5DfJ5EeMtxDdCYiivzKV9SmmIuOiUb";
 }
 
 PeerConnectionClient::~PeerConnectionClient() {
@@ -169,7 +164,15 @@ void PeerConnectionClient::InitSocketSignals() {
       &PeerConnectionClient::OnRead);
 }
 
-int PeerConnectionClient::id() const {
+void PeerConnectionClient::setID(int64_t id) {
+    my_id_ = id;
+}
+
+void PeerConnectionClient::setToken(std::string& token) {
+    token_ = token;
+}
+
+int64_t PeerConnectionClient::id() const {
   return my_id_;
 }
 
@@ -177,9 +180,6 @@ bool PeerConnectionClient::is_connected() const {
   return my_id_ != -1;
 }
 
-const Peers& PeerConnectionClient::peers() const {
-  return peers_;
-}
 
 void PeerConnectionClient::RegisterObserver(
     PeerConnectionClientObserver* callback) {
@@ -207,14 +207,21 @@ void PeerConnectionClient::Connect(const std::string& client_name) {
   server_address_.SetPort(23000);
   client_name_ = client_name;
 
-  if (server_address_.IsUnresolvedIP()) {
+  rtc::Thread::Current()->PostDelayed(RTC_FROM_HERE, kHeartbeatDelay, this,
+                                      1);
+  
+  DoResolveOrConnect();
+}
+
+void PeerConnectionClient::DoResolveOrConnect() {
+     if (server_address_.IsUnresolvedIP()) {
     state_ = RESOLVING;
     resolver_ = new rtc::AsyncResolver();
     resolver_->SignalDone.connect(this, &PeerConnectionClient::OnResolveResult);
     resolver_->Start(server_address_);
   } else {
     DoConnect();
-  }
+  } 
 }
 
 void PeerConnectionClient::OnResolveResult(
@@ -243,26 +250,6 @@ void PeerConnectionClient::DoConnect() {
   }
 }
 
-bool PeerConnectionClient::SendToPeer(int peer_id, const std::string& message) {
-  if (state_ != CONNECTED)
-    return false;
-
-  Json::Reader reader;
-  Json::Value value;
-
-  if (!reader.parse(message, value)) {
-      return false;
-  }
-
-  Json::Value json;
-  json["p2p"] = value;
-  std::string s = rtc::JsonValueToString(json);
-
-  SendRTMessage(s);
-  return true;
-}
-
-
 bool PeerConnectionClient::SignOut() {
   if (state_ == NOT_CONNECTED || state_ == SIGNING_OUT)
     return true;
@@ -276,12 +263,10 @@ bool PeerConnectionClient::SignOut() {
 
 void PeerConnectionClient::Close() {
   control_socket_->Close();
-  peers_.clear();
   if (resolver_ != NULL) {
     resolver_->Destroy(false);
     resolver_ = NULL;
   }
-  my_id_ = -1;
   state_ = NOT_CONNECTED;
 }
 
@@ -296,18 +281,10 @@ bool PeerConnectionClient::ConnectControlSocket() {
 }
 
 void PeerConnectionClient::OnConnect(rtc::AsyncSocket* socket) {
-    my_id_ = 10;
     state_ = CONNECTED;
     LOG(INFO) << "on connected";
-
-    rtc::Thread::Current()->PostDelayed(RTC_FROM_HERE, kHeartbeatDelay, this,
-					1);
-
-    rtc::Thread::Current()->PostDelayed(RTC_FROM_HERE, kPingDelay, this,
-					2);
     SendAuth();
 }
-
 
 static int64_t hton64(int64_t val )
 {
@@ -416,7 +393,7 @@ void PeerConnectionClient::OnRead(rtc::AsyncSocket* socket) {
             LOG(INFO) << "auth status:" << m.status;
             callback_->OnSignedIn();
         } else if (m.cmd == MSG_RT) {
-            HandleRTMessage(m);
+            callback_->HandleRTMessage(m.sender, m.receiver, m.content);
         } else if (m.cmd == MSG_PONG) {
   	    HandlePong(m);
 	}
@@ -425,66 +402,15 @@ void PeerConnectionClient::OnRead(rtc::AsyncSocket* socket) {
     data_size_ -= offset;
 }
 
-void PeerConnectionClient::SendRTMessage(std::string content) {
+void PeerConnectionClient::SendRTMessage(int64_t peer_id, std::string content) {
     Message m;
     m.cmd = MSG_RT;
     m.sender = my_id_;
-    //todo
-    m.receiver = 1;
+    m.receiver = peer_id;
     m.content = content;
     SendMessage(m);    
 }
 
-void PeerConnectionClient::SendVOIPCommand(int voip_cmd, const std::string& channel_id) {
-    Json::Value value;
-    value["command"] = voip_cmd;
-    value["channel_id"] = channel_id;
-
-    Json::Value json;
-    json["voip"] = value;
-    std::string s = rtc::JsonValueToString(json);
-    
-    SendRTMessage(s);
-}
-
-void PeerConnectionClient::HandleRTMessage(Message& msg) {
-     Json::Reader reader;
-     Json::Value value;
-
-     if (reader.parse(msg.content, value)) {
-         Json::Value obj;
-         bool r;
-         r = rtc::GetValueFromJsonObject(value, "voip", &obj);
-         if (r) {
-             int64_t cmd = obj["command"].asInt();
-             std::string channel_id = obj["channel_id"].asString();
-             LOG(INFO) << "voip:" << cmd << "channel:" << channel_id;
-
-             if (cmd == VOIP_COMMAND_DIAL_VIDEO) {
-                 //auto accept
-                 SendVOIPCommand(VOIP_COMMAND_ACCEPT, channel_id);
-             } else if (cmd == VOIP_COMMAND_CONNECTED) {
-                 //连接成功
-                 channel_id_ = channel_id;
-                 peers_[msg.sender] = "unknown";
-                 callback_->OnPeerConnected(msg.sender, "unknown");
-             } else if (cmd == VOIP_COMMAND_HANG_UP) {
-                 //对方挂断
-                 peers_.erase(msg.sender);
-                 channel_id_ = "";
-                 callback_->OnPeerDisconnected(msg.sender);
-             }
-             return;
-         }
-
-         r = rtc::GetValueFromJsonObject(value, "p2p", &obj);
-         if (r) {
-             LOG(INFO) << "p2p message:" << msg.content;
-             callback_->OnMessageFromPeer(msg.sender, rtc::JsonValueToString(obj));
-             return;
-         }
-     }
-}
 
 void PeerConnectionClient::HandlePong(Message& msg) {
 
@@ -501,44 +427,29 @@ void PeerConnectionClient::OnWrite(rtc::AsyncSocket* socket) {
 }
 
 void PeerConnectionClient::OnClose(rtc::AsyncSocket* socket, int err) {
-  LOG(INFO) << __FUNCTION__;
-
+  LOG(INFO) << __FUNCTION__ << "error:" << err;
+  state_ = NOT_CONNECTED;
   socket->Close();
-
-#ifdef WIN32
-    if (err != WSAECONNREFUSED) {
-#else
-    if (err != ECONNREFUSED) {
-#endif
-        callback_->OnMessageSent(err);
-    } else {
-        if (socket == control_socket_.get()) {
-            LOG(WARNING) << "Connection refused; retrying in 2 seconds";
-            rtc::Thread::Current()->PostDelayed(RTC_FROM_HERE, kReconnectDelay, this,
-                                                0);
-        }
-    }
+  control_socket_.reset(NULL);
+  
+  LOG(WARNING) << "Connection refused; retrying in 2 seconds";
+  rtc::Thread::Current()->PostDelayed(RTC_FROM_HERE, kReconnectDelay, this,
+                                      0);
 }
 
 void PeerConnectionClient::OnMessage(rtc::Message* msg) {
   if (msg->message_id == 0) {
-      DoConnect();
+      DoResolveOrConnect();
   } else if (msg->message_id == 1) {
       SendPing();
       rtc::Thread::Current()->PostDelayed(RTC_FROM_HERE, kHeartbeatDelay, this,
                                           1);    
-  } else if (msg->message_id == 2) {
-       if (peers_.size() > 0 && channel_id_.length() > 0) {
-         SendVOIPCommand(VOIP_COMMAND_PING, channel_id_);
-       }
-       rtc::Thread::Current()->PostDelayed(RTC_FROM_HERE, kPingDelay, this,
-					2);
   }
 }
 
 
 bool PeerConnectionClient::SendMessage(Message& msg) {
-    if (control_socket_ == NULL) {
+    if (control_socket_ == NULL || state_ != CONNECTED) {
         return false;
     }
 

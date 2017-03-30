@@ -20,7 +20,6 @@
 #include "webrtc/base/signalthread.h"
 #include "webrtc/base/sigslot.h"
 
-typedef std::map<int, std::string> Peers;
 enum EVOIPCommand {
     //语音通话
     VOIP_COMMAND_DIAL = 1,
@@ -43,12 +42,12 @@ enum EVOIPCommand {
 struct PeerConnectionClientObserver {
   virtual void OnSignedIn() = 0;  // Called when we're logged on.
   virtual void OnDisconnected() = 0;
-  virtual void OnPeerConnected(int id, const std::string& name) = 0;
-  virtual void OnPeerDisconnected(int peer_id) = 0;
-  virtual void OnMessageFromPeer(int peer_id, const std::string& message) = 0;
-  virtual void OnMessageSent(int err) = 0;
   virtual void OnServerConnectionFailure() = 0;
-
+    
+  virtual void HandleRTMessage(int64_t sender,
+                               int64_t receiver,
+                               std::string& content) = 0;
+    
  protected:
   virtual ~PeerConnectionClientObserver() {}
 };
@@ -69,21 +68,23 @@ class PeerConnectionClient : public sigslot::has_slots<>,
   PeerConnectionClient();
   ~PeerConnectionClient();
 
-  int id() const;
+  int64_t id() const;
+  void setID(int64_t id);
+  void setToken(std::string& token);
+  
   bool is_connected() const;
-  const Peers& peers() const;
-
-  void RegisterObserver(PeerConnectionClientObserver* callback);
+  void RegisterObserver(PeerConnectionClientObserver *ob);
 
   void Connect(const std::string& client_name);
-
-  bool SendToPeer(int peer_id, const std::string& message);
   bool SignOut();
 
+  void SendRTMessage(int64_t peer_id, std::string content);
+    
   // implements the MessageHandler interface
   void OnMessage(rtc::Message* msg);
-
+  
  protected:
+  void DoResolveOrConnect();
   void DoConnect();
   void Close();
   void InitSocketSignals();
@@ -100,11 +101,10 @@ class PeerConnectionClient : public sigslot::has_slots<>,
   void OnResolveResult(rtc::AsyncResolverInterface* resolver);
 
 
-  void HandleRTMessage(Message& msg);
   void HandlePong(Message& msg);
   void SendAuth();
   void SendVOIPCommand(int voip_cmd, const std::string& channel_id);
-  void SendRTMessage(std::string content);
+
   void SendPing();
   bool SendMessage(Message& msg);
     
@@ -115,18 +115,16 @@ class PeerConnectionClient : public sigslot::has_slots<>,
 
   void ReadHeader(char *p, Message *m);
   bool ReadMessage(char *p, int size, Message& m);
-    
-      
+
+
   PeerConnectionClientObserver* callback_;
   rtc::SocketAddress server_address_;
   rtc::AsyncResolver* resolver_;
   std::unique_ptr<rtc::AsyncSocket> control_socket_;
   std::string client_name_;
-  Peers peers_;
   State state_;
-  int my_id_;
-
-
+  int64_t my_id_;
+  
   char data_[128*1024];
   int data_size_;
   
@@ -138,9 +136,6 @@ class PeerConnectionClient : public sigslot::has_slots<>,
   int size_;
 
   int seq_;
-
-  std::string channel_id_;
-
 };
 
 #endif  // WEBRTC_EXAMPLES_PEERCONNECTION_CLIENT_PEER_CONNECTION_CLIENT_H_
