@@ -64,16 +64,13 @@ class DummySetSessionDescriptionObserver
   ~DummySetSessionDescriptionObserver() {}
 };
 
-Conductor::Conductor(PeerConnectionClient* client, MainWindow* main_wnd, rtc::Thread* main_thread)
+Conductor::Conductor(PeerConnectionClient* client, rtc::Thread* main_thread)
   : peer_id_(-1),
     loopback_(false),
     client_(client),
-    main_wnd_(main_wnd),
     main_thread_(main_thread) {
     client_->RegisterObserver(this);
-    main_wnd->RegisterObserver(this);
     
-
     _networkThread = rtc::Thread::CreateWithSocketServer();
     bool result = _networkThread->Start();
     if (!result) {
@@ -173,8 +170,6 @@ bool Conductor::CreatePeerConnection(bool dtls) {
 void Conductor::DeletePeerConnection() {
   peer_connection_ = NULL;
   active_streams_.clear();
-  //main_wnd_->StopLocalRenderer();
-  //main_wnd_->StopRemoteRenderer();
   peer_connection_factory_ = NULL;
   peer_id_ = -1;
   loopback_ = false;
@@ -190,7 +185,6 @@ void Conductor::OnAddStream(
   LOG(INFO) << __FUNCTION__ << " " << stream->label();
 
   main_thread_->Post(RTC_FROM_HERE, this, NEW_STREAM_ADDED, new MessageData(stream.release()));
-  //main_wnd_->QueueUIThreadCallback(NEW_STREAM_ADDED, stream.release());
 }
 
 void Conductor::OnRemoveStream(
@@ -198,7 +192,6 @@ void Conductor::OnRemoveStream(
   LOG(INFO) << __FUNCTION__ << " " << stream->label();
 
   main_thread_->Post(RTC_FROM_HERE, this, STREAM_REMOVED, new MessageData(stream.release()));
-  //main_wnd_->QueueUIThreadCallback(STREAM_REMOVED, stream.release());
 }
 
 void Conductor::OnIceCandidate(const webrtc::IceCandidateInterface* candidate) {
@@ -247,7 +240,6 @@ void Conductor::OnPeerDisconnected(int id) {
   if (id == peer_id_) {
     LOG(INFO) << "Our peer disconnected";
     main_thread_->Post(RTC_FROM_HERE, this, PEER_CONNECTION_CLOSED, NULL);
-    //main_wnd_->QueueUIThreadCallback(PEER_CONNECTION_CLOSED, NULL);
   }
 }
 
@@ -349,28 +341,10 @@ void Conductor::OnMessageFromPeer(int peer_id, const std::string& message) {
 void Conductor::OnMessageSent(int err) {
   // Process the next pending message if any.
   main_thread_->Post(RTC_FROM_HERE, this, SEND_MESSAGE_TO_PEER, NULL);
-  //main_wnd_->QueueUIThreadCallback(SEND_MESSAGE_TO_PEER, NULL);
 }
 
 void Conductor::OnServerConnectionFailure() {
     LOG(INFO) << "Failed to connect to server";
-}
-
-//
-// MainWndCallback implementation.
-//
-
-void Conductor::StartLogin(const std::string& server, int port) {
-  LOG(INFO) << "start login...";
-
-}
-
-void Conductor::DisconnectFromServer() {
-
-}
-
-void Conductor::ConnectToPeer(int peer_id) {
-
 }
 
 std::unique_ptr<cricket::VideoCapturer> Conductor::OpenVideoCaptureDevice() {
@@ -421,8 +395,6 @@ void Conductor::AddStreams() {
           kVideoLabel,
           peer_connection_factory_->CreateVideoSource(OpenVideoCaptureDevice(),
                                                       NULL)));
-  //main_wnd_->StartLocalRenderer(video_track);
-
   rtc::scoped_refptr<webrtc::MediaStreamInterface> stream =
       peer_connection_factory_->CreateLocalMediaStream(kStreamLabel);
 
@@ -435,10 +407,6 @@ void Conductor::AddStreams() {
                     rtc::scoped_refptr<webrtc::MediaStreamInterface> >
       MediaStreamPair;
   active_streams_.insert(MediaStreamPair(stream->label(), stream));
-}
-
-void Conductor::DisconnectFromCurrentPeer() {
-  LOG(INFO) << __FUNCTION__;
 }
 
 void Conductor::OnMessage(rtc::Message* msg) {
@@ -472,7 +440,6 @@ void Conductor::OnMessage(rtc::Message* msg) {
        
               if (!client_->SendToPeer(peer_id_, *msg) && peer_id_ != -1) {
                   LOG(LS_ERROR) << "SendToPeer failed";
-                  DisconnectFromServer();
               }
               delete msg;
           }
@@ -506,9 +473,6 @@ void Conductor::OnMessage(rtc::Message* msg) {
 
 
     }
-}
-void Conductor::UIThreadCallback(int msg_id, void* data) {
- 
 }
 
 void Conductor::OnSuccess(webrtc::SessionDescriptionInterface* desc) {
@@ -546,6 +510,4 @@ void Conductor::OnFailure(const std::string& error) {
 
 void Conductor::SendMessage(const std::string& json_object) {
   std::string* msg = new std::string(json_object);
-  main_thread_->Post(RTC_FROM_HERE, this, SEND_MESSAGE_TO_PEER, new MessageData(msg));  
-  //main_wnd_->QueueUIThreadCallback(SEND_MESSAGE_TO_PEER, msg);
-}
+  main_thread_->Post(RTC_FROM_HERE, this, SEND_MESSAGE_TO_PEER, new MessageData(msg));}

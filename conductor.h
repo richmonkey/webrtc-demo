@@ -19,7 +19,6 @@
 
 #include "webrtc/api/mediastreaminterface.h"
 #include "webrtc/api/peerconnectioninterface.h"
-#include "webrtc/examples/voip/main_wnd.h"
 #include "webrtc/examples/voip/peer_connection_client.h"
 
 namespace webrtc {
@@ -34,8 +33,7 @@ class Conductor
   : public webrtc::PeerConnectionObserver,
     public webrtc::CreateSessionDescriptionObserver,
     public PeerConnectionClientObserver,
-    public rtc::MessageHandler,
-    public MainWndCallback {
+    public rtc::MessageHandler {
  public:
   enum CallbackID {
     MEDIA_CHANNELS_INITIALIZED = 1,
@@ -45,7 +43,7 @@ class Conductor
     STREAM_REMOVED,
   };
 
-  Conductor(PeerConnectionClient* client, MainWindow* main_wnd, rtc::Thread* main_thread);
+  Conductor(PeerConnectionClient* client, rtc::Thread* main_thread);
 
   bool connection_active() const;
 
@@ -99,19 +97,7 @@ class Conductor
 
   void OnServerConnectionFailure() override;
 
-  //
-  // MainWndCallback implementation.
-  //
 
-  void StartLogin(const std::string& server, int port) override;
-
-  void DisconnectFromServer() override;
-
-  void ConnectToPeer(int peer_id) override;
-
-  void DisconnectFromCurrentPeer() override;
-
-  void UIThreadCallback(int msg_id, void* data) override;
 
   // CreateSessionDescriptionObserver implementation.
   void OnSuccess(webrtc::SessionDescriptionInterface* desc) override;
@@ -130,7 +116,6 @@ class Conductor
   rtc::scoped_refptr<webrtc::PeerConnectionFactoryInterface>
       peer_connection_factory_;
   PeerConnectionClient* client_;
-  MainWindow* main_wnd_;
   std::deque<std::string*> pending_messages_;
   std::map<std::string, rtc::scoped_refptr<webrtc::MediaStreamInterface> >
       active_streams_;
