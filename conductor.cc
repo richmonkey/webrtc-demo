@@ -15,6 +15,7 @@
 #include <vector>
 
 #include "webrtc/examples/voip/linux/videocapturer.h"
+#include "webrtc/examples/voip/net_capturer.h"
 #include "webrtc/examples/voip/h264videocodecfactory.h"
 
 
@@ -372,7 +373,7 @@ std::unique_ptr<cricket::VideoCapturer> Conductor::OpenVideoCaptureDevice() {
   // 
   //return capturer;
     
-    std::unique_ptr<webrtc::VideoCaptureV4L2> c(new webrtc::VideoCaptureV4L2());
+    std::unique_ptr<webrtc::NetCapturer> c(new webrtc::NetCapturer());
     return std::move(c);
 
 }

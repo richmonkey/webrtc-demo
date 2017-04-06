@@ -214,7 +214,8 @@ void PeerConnectionClient::Connect(const std::string& client_name) {
 }
 
 void PeerConnectionClient::DoResolveOrConnect() {
-     if (server_address_.IsUnresolvedIP()) {
+  //todo 刷新dns
+  if (server_address_.IsUnresolvedIP()) {
     state_ = RESOLVING;
     resolver_ = new rtc::AsyncResolver();
     resolver_->SignalDone.connect(this, &PeerConnectionClient::OnResolveResult);

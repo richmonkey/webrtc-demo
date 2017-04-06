@@ -8,6 +8,7 @@
  *  be found in the AUTHORS file in the root of the source tree.
  */
 #include "webrtc/examples/voip/h264videocodecfactory.h"
+#include "webrtc/examples/voip/net_encoder.h"
 
 #include "webrtc/modules/video_coding/codecs/h264/include/h264.h"
 
@@ -33,7 +34,8 @@ VideoEncoder* H264VideoEncoderFactory::CreateVideoEncoder(
     switch (codec_type) {
     case webrtc::kVideoCodecH264: {
         LOG(INFO) << "create encoder.............";
-        VideoEncoder *encoder = webrtc::H264Encoder::Create(codec);
+        VideoEncoder *encoder = new NetEncoder(codec);
+        //VideoEncoder *encoder = webrtc::H264Encoder::Create(codec);
         return encoder;
     }
     default:
@@ -60,6 +62,7 @@ H264VideoEncoderFactory::supported_codecs() const {
     codec.SetParam(cricket::kH264FmtpProfileLevelId,
                    cricket::kH264ProfileLevelConstrainedBaseline);
     codec.SetParam(cricket::kH264FmtpLevelAsymmetryAllowed, "1");
+    codec.SetParam(cricket::kH264FmtpPacketizationMode, "1");    
     supported_codecs_.push_back(std::move(codec));
   }
 

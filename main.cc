@@ -198,6 +198,7 @@ int main(int argc, char* argv[]) {
     new rtc::RefCountedObject<Conductor>(&client, thread));
 
   Main m(&client, thread);
+  //todo 注册登录当前设备
   std::string token = "5DfJ5EeMtxDdCYiivzKV9SmmIuOiUb";
   client.setToken(token);
   client.setID(10);//当前uid
