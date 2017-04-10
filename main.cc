@@ -7,6 +7,7 @@
 #include "webrtc/base/timeutils.h"
 #include "webrtc/base/physicalsocketserver.h"
 #include "webrtc/base/json.h"
+#include "webrtc/modules/audio_device/dummy/file_audio_device_factory.h"
 
 //ping peer
 const int kPingDelay = 1000;
@@ -188,7 +189,8 @@ int main(int argc, char* argv[]) {
     rtc::FlagList::Print(NULL, false);
     return 0;
   }
-  
+
+  webrtc::FileAudioDeviceFactory::SetFilenamesToUse("/tmp/test_input.pcm", "/tmp/test_output.pcm");
   rtc::AutoThread auto_thread;
   rtc::Thread* thread = rtc::Thread::Current();
   rtc::InitializeSSL();

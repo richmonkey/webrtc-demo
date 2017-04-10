@@ -52,19 +52,8 @@ NetCapturer::NetCapturer() :
     _currentFrameRate(-1),
     _captureStarted(false),
     _captureVideoType(kVideoI420) {
-
-    int fd;
-    char device[32];
-    
-    sprintf(device, "/dev/video%d", 0);
-    fd = open(device, O_RDONLY);
-    if (fd == -1) {
-        return;
-    }
-
-    std::set<cricket::VideoFormat> supportedFormats = FillCapabilities(fd);
-    close(fd);
-
+    std::set<cricket::VideoFormat> supportedFormats = FillCapabilities(0);
+  
     std::vector<cricket::VideoFormat> formats;
     formats.assign(supportedFormats.begin(),
                    supportedFormats.end());
@@ -114,7 +103,7 @@ std::set<cricket::VideoFormat> NetCapturer::FillCapabilities(int fd)
     std::set<cricket::VideoFormat> supportedFormats;
     cricket::VideoFormat format;
     format.width = 640;
-    format.height = 480;
+    format.height = 352;
     format.fourcc = cricket::FOURCC_I420;
     format.interval = format.FpsToInterval(15);
     supportedFormats.insert(format);
