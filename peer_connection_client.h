@@ -75,7 +75,7 @@ class PeerConnectionClient : public sigslot::has_slots<>,
   bool is_connected() const;
   void RegisterObserver(PeerConnectionClientObserver *ob);
 
-  void Connect(const std::string& client_name);
+  void Connect();
   bool SignOut();
 
   void SendRTMessage(int64_t peer_id, std::string content);
@@ -108,20 +108,13 @@ class PeerConnectionClient : public sigslot::has_slots<>,
   void SendPing();
   bool SendMessage(Message& msg);
     
-  int32_t ReadInt32(char *p);
-  int64_t ReadInt64(char *p);
-  void WriteInt32(char *p, int32_t t);
-  void WriteInt64(char *p, int64_t t);
 
-  void ReadHeader(char *p, Message *m);
-  bool ReadMessage(char *p, int size, Message& m);
 
 
   PeerConnectionClientObserver* callback_;
   rtc::SocketAddress server_address_;
   rtc::AsyncResolver* resolver_;
   std::unique_ptr<rtc::AsyncSocket> control_socket_;
-  std::string client_name_;
   State state_;
   int64_t my_id_;
   

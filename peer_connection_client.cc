@@ -8,7 +8,8 @@
  *  be found in the AUTHORS file in the root of the source tree.
  */
 
-#include "webrtc/examples/voip/peer_connection_client.h"
+#include "webrtc/examples/im_client/peer_connection_client.h"
+#include "webrtc/examples/im_client/message.h"
 
 #include "webrtc/examples/voip/defaults.h"
 #include "webrtc/base/checks.h"
@@ -22,62 +23,6 @@
 #endif
 
 using rtc::sprintfn;
-
-#define MSG_HEARTBEAT 1
-
-#define MSG_AUTH_STATUS 3
-#define MSG_IM 4
-#define MSG_ACK 5
-
-#define MSG_GROUP_NOTIFICATION 7
-#define MSG_GROUP_IM 8
-
-#define MSG_INPUTING 10
-
-#define MSG_PING 13
-#define MSG_PONG 14
-#define MSG_AUTH_TOKEN 15
-
-#define MSG_RT 17
-#define MSG_ENTER_ROOM 18
-#define MSG_LEAVE_ROOM 19
-#define MSG_ROOM_IM 20
-#define MSG_SYSTEM 21
-#define MSG_UNREAD_COUNT 22
-
-#define MSG_CUSTOMER 24
-#define MSG_CUSTOMER_SUPPORT 25
-
-
-//客户端->服务端
-#define MSG_SYNC  26 //同步消息
-//服务端->客服端
-#define MSG_SYNC_BEGIN  27
-#define MSG_SYNC_END  28
-//通知客户端有新消息
-#define MSG_SYNC_NOTIFY  29
-
-//客户端->服务端
-#define MSG_SYNC_GROUP  30//同步超级群消息
-//服务端->客服端
-#define MSG_SYNC_GROUP_BEGIN  31
-#define MSG_SYNC_GROUP_END  32
-//通知客户端有新消息
-#define MSG_SYNC_GROUP_NOTIFY  33
-
-//客服端->服务端
-#define MSG_SYNC_KEY  34
-#define MSG_GROUP_SYNC_KEY 35
-
-
-#define MSG_VOIP_CONTROL 64
-
-#define PLATFORM_IOS  1
-#define PLATFORM_ANDROID 2
-#define PLATFORM_WEB 3
-#define PLATFORM_LINUX 4
-
-#define HEADER_SIZE 12
 
 namespace {
 
@@ -104,36 +49,6 @@ rtc::AsyncSocket* CreateClientSocket(int family) {
 
 }  // namespace
 
-
-class Message {
-public:
-  Message() {}
-  ~Message() {}
-  //header
-  //4字节length + 4字节seq + 1字节cmd + 1字节version + 2字节0
-  int length;//body的长度
-  int seq;
-  int cmd;
-  int version;
-
-
-
-  //MSG_AUTH_STATUS
-  int status;
-  
-
-  //MSG_AUTH_TOKEN
-  std::string device_id;
-  std::string token;
-  int platform_id;
-
-
-  
-  //MSG_RT
-  int64_t sender;
-  int64_t receiver;
-  std::string content;
-};
 
 
 PeerConnectionClient::PeerConnectionClient()
@@ -187,9 +102,7 @@ void PeerConnectionClient::RegisterObserver(
   callback_ = callback;
 }
 
-void PeerConnectionClient::Connect(const std::string& client_name) {
-  RTC_DCHECK(!client_name.empty());
-
+void PeerConnectionClient::Connect() {
   if (state_ != NOT_CONNECTED) {
     LOG(WARNING)
         << "The client must not be connected before you can call Connect()";
@@ -197,15 +110,10 @@ void PeerConnectionClient::Connect(const std::string& client_name) {
     return;
   }
 
-  if (client_name.empty()) {
-    callback_->OnServerConnectionFailure();
-    return;
-  }
 
   LOG(INFO) << "connect...:" << "115.28.44.59:23000";
   server_address_.SetIP("115.28.44.59");
   server_address_.SetPort(23000);
-  client_name_ = client_name;
 
   rtc::Thread::Current()->PostDelayed(RTC_FROM_HERE, kHeartbeatDelay, this,
                                       1);
@@ -285,90 +193,6 @@ void PeerConnectionClient::OnConnect(rtc::AsyncSocket* socket) {
     state_ = CONNECTED;
     LOG(INFO) << "on connected";
     SendAuth();
-}
-
-static int64_t hton64(int64_t val )
-{
-    int64_t high, low;
-    low = (int64_t)(val & 0x00000000FFFFFFFF);
-    val >>= 32;
-    high = (int64_t)(val & 0x00000000FFFFFFFF);
-    low = htonl( low );
-    high = htonl( high );
-    
-    return (int64_t)low << 32 | high;
-}
-
-static int64_t ntoh64(int64_t val )
-{
-    int64_t high, low;
-    low = (int64_t)(val & 0x00000000FFFFFFFF);
-    val>>=32;
-    high = (int64_t)(val & 0x00000000FFFFFFFF);
-    low = ntohl( low );
-    high = ntohl( high );
-    
-    return (int64_t)low << 32 | high;
-}
-
-void PeerConnectionClient::WriteInt32(char *p, int32_t t) {
-    t = htonl(t);
-    memcpy(p, &t, 4);
-}
-
-void PeerConnectionClient::WriteInt64(char *p, int64_t t) {
-    t = hton64(t);
-    memcpy(p, &t, 8);
-}
-
-int32_t PeerConnectionClient::ReadInt32(char *p) {
-    int32_t t;
-    memcpy(&t, p, 4);
-    return ntohl(t);
-}
-
-int64_t PeerConnectionClient::ReadInt64(char *p) {
-    int64_t t;
-    memcpy(&t, p, 8);
-    return ntoh64(t);
-}
-
-void PeerConnectionClient::ReadHeader(char *p, Message *m) {
-    int32_t t;
-    memcpy(&t, p, 4);
-    m->length = ntohl(t);
-    p += 4;
-    
-    memcpy(&t, p, 4);
-    m->seq = ntohl(t);
-    p += 4;
-
-    m->cmd = *p++;
-    m->version = *p++;
-}
-
-bool PeerConnectionClient::ReadMessage(char *p, int size, Message& m) {
-    if (size < HEADER_SIZE) {
-        return false;
-    }
-
-    ReadHeader(p, &m);
-    if (m.length > (size - HEADER_SIZE)) {
-        return false;
-    }
-    
-    p = p + HEADER_SIZE;
-    if (m.cmd == MSG_AUTH_STATUS) {
-        //assert m.length == 4
-        m.status = ReadInt32(p);
-    } else if (m.cmd == MSG_RT) {
-        m.sender = ReadInt64(p);
-        p += 8;
-        m.receiver = ReadInt64(p);
-        p += 8;
-        m.content.assign(p, m.length - 16);
-    }
-    return true;
 }
 
 void PeerConnectionClient::OnRead(rtc::AsyncSocket* socket) {
@@ -457,46 +281,8 @@ bool PeerConnectionClient::SendMessage(Message& msg) {
     msg.seq = ++seq_;
     
     char buf[64*1024] = {0};
-    char *p = buf;
-
-    int body_len = 0;
-    WriteInt32(p, body_len);
-    p += 4;
-    WriteInt32(p, msg.seq);
-    p += 4;
-
-    *p++ = msg.cmd;
-    *p++ = msg.version;
-    *p++ = 0;
-    *p++ = 0;
-
-    if (msg.cmd == MSG_AUTH_TOKEN) {
-        *p++ = msg.platform_id;
-        
-        *p++ = msg.token.length();
-        memcpy(p, msg.token.c_str(), msg.token.length());
-        p += msg.token.length();
-        
-        *p++ = msg.device_id.length();
-        memcpy(p, msg.device_id.c_str(), msg.device_id.length());
-        p += msg.device_id.length();
-
-        body_len = 1 + 1 + msg.token.length() + 1 + msg.device_id.length();
-    } else if (msg.cmd == MSG_RT) {
-        WriteInt64(p, msg.sender);
-        p += 8;
-        WriteInt64(p, msg.receiver);
-        p += 8;
-        memcpy(p, msg.content.c_str(), msg.content.length());
-        p += msg.content.length();
-
-        body_len = 8 + 8 + msg.content.length();
-    }
+    int len = WriteMessage(buf, 64*1024, msg);
     
-    //重写消息体长度
-    WriteInt32(buf, body_len);
-    
-    int len = p - buf;
     if (size_ > 0) {
         //socket不可写
         int left = 128*1024 - offset_ - size_;
