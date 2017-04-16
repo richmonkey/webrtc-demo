@@ -98,7 +98,13 @@ void Connection::OnRead(rtc::AsyncSocket* socket) {
         
     }
 
-    data_size_ -= offset;
+    if (offset > 0) {
+        data_size_ -= offset;
+        if (data_size_ > 0) {
+            //将不完整的消息copy到缓冲区的开头位置
+            memmove(data_, data_ + offset, data_size_);
+        }
+    }
     
 
 }

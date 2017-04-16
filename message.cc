@@ -1,6 +1,7 @@
 #include "webrtc/examples/im_client/message.h"
 #include <string.h>
 #include <arpa/inet.h>
+#include <assert.h>
 
 static int64_t hton64(int64_t val )
 {
@@ -59,7 +60,8 @@ void ReadHeader(char *p, Message *m) {
     m->seq = ntohl(t);
     p += 4;
 
-    m->cmd = *p++;
+    uint8_t c = *p++;
+    m->cmd = c;
     m->version = *p++;
 }
 
@@ -78,13 +80,17 @@ bool ReadMessage(char *p, int size, Message& m) {
     p = p + HEADER_SIZE;
     if (m.cmd == MSG_AUTH_STATUS) {
         //assert m.length == 4
+        assert(m.length >= 4);
         m.status = ReadInt32(p);
     } else if (m.cmd == MSG_RT) {
+        assert(m.length >= 16);
         m.sender = ReadInt64(p);
         p += 8;
         m.receiver = ReadInt64(p);
         p += 8;
         m.content.assign(p, m.length - 16);
+    } else if (m.cmd == MSG_REGISTER_CAMERA) {
+        m.camera_id.assign(p, m.length);
     }
     return true;
 }
@@ -125,6 +131,10 @@ int WriteMessage(char *buf, int size, Message& msg) {
         p += msg.content.length();
 
         body_len = 8 + 8 + msg.content.length();
+    } else if (msg.cmd == MSG_REGISTER_CAMERA) {
+        memcpy(p, msg.camera_id.c_str(), msg.camera_id.length());
+        
+        body_len = msg.camera_id.length();
     }
     
     //重写消息体长度

@@ -61,7 +61,6 @@ class PeerConnectionClient : public sigslot::has_slots<>,
     RESOLVING,
     SIGNING_IN,
     CONNECTED,
-    SIGNING_OUT_WAITING,
     SIGNING_OUT,
   };
 

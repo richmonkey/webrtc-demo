@@ -112,7 +112,7 @@ void PeerConnectionClient::Connect() {
 
 
   LOG(INFO) << "connect...:" << "115.28.44.59:23000";
-  server_address_.SetIP("115.28.44.59");
+  server_address_.SetIP("115.28.44.59");//imnode2.gobelieve.io
   server_address_.SetPort(23000);
 
   rtc::Thread::Current()->PostDelayed(RTC_FROM_HERE, kHeartbeatDelay, this,
@@ -164,7 +164,9 @@ bool PeerConnectionClient::SignOut() {
     return true;
 
   Close();
-  
+
+  rtc::Thread::Current()->Clear(this);
+      
   state_ = SIGNING_OUT;
 
   return true;
@@ -220,11 +222,17 @@ void PeerConnectionClient::OnRead(rtc::AsyncSocket* socket) {
         } else if (m.cmd == MSG_RT) {
             callback_->HandleRTMessage(m.sender, m.receiver, m.content);
         } else if (m.cmd == MSG_PONG) {
-  	    HandlePong(m);
-	}
+            HandlePong(m);
+        }
     }
 
-    data_size_ -= offset;
+    if (offset > 0) {
+        data_size_ -= offset;
+        if (data_size_ > 0) {
+            //将不完整的消息copy到缓冲区的开头位置
+            memmove(data_, data_ + offset, data_size_);
+        }
+    }
 }
 
 void PeerConnectionClient::SendRTMessage(int64_t peer_id, std::string content) {
@@ -238,7 +246,7 @@ void PeerConnectionClient::SendRTMessage(int64_t peer_id, std::string content) {
 
 
 void PeerConnectionClient::HandlePong(Message& msg) {
-
+    LOG(INFO) << "pong...";
 }
 
 void PeerConnectionClient::OnWrite(rtc::AsyncSocket* socket) {
@@ -255,7 +263,6 @@ void PeerConnectionClient::OnClose(rtc::AsyncSocket* socket, int err) {
   LOG(INFO) << __FUNCTION__ << "error:" << err;
   state_ = NOT_CONNECTED;
   socket->Close();
-  control_socket_.reset(NULL);
   
   LOG(WARNING) << "Connection refused; retrying in 2 seconds";
   rtc::Thread::Current()->PostDelayed(RTC_FROM_HERE, kReconnectDelay, this,
@@ -263,13 +270,21 @@ void PeerConnectionClient::OnClose(rtc::AsyncSocket* socket, int err) {
 }
 
 void PeerConnectionClient::OnMessage(rtc::Message* msg) {
-  if (msg->message_id == 0) {
-      DoResolveOrConnect();
-  } else if (msg->message_id == 1) {
-      SendPing();
-      rtc::Thread::Current()->PostDelayed(RTC_FROM_HERE, kHeartbeatDelay, this,
-                                          1);    
-  }
+    if (msg->message_id == 0) {
+        if (state_ == NOT_CONNECTED) {
+            DoResolveOrConnect();
+        }
+    } else if (msg->message_id == 1) {
+        if (state_ == NOT_CONNECTED) {
+            DoResolveOrConnect();
+        } else {
+            SendPing();
+            if (state_ != SIGNING_OUT) {
+                rtc::Thread::Current()->PostDelayed(RTC_FROM_HERE, kHeartbeatDelay, this,
+                                                    1);
+            }
+        }
+    }
 }
 
 
