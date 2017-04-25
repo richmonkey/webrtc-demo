@@ -22,6 +22,10 @@
 #include "webrtc/base/win32socketserver.h"
 #endif
 
+
+#define HOST "115.28.44.59" //imnode2.gobelieve.io
+#define PORT 23000
+
 using rtc::sprintfn;
 
 namespace {
@@ -54,7 +58,8 @@ rtc::AsyncSocket* CreateClientSocket(int family) {
 PeerConnectionClient::PeerConnectionClient()
   : resolver_(NULL),
     state_(NOT_CONNECTED),
-    my_id_(-1) {
+    my_id_(-1),
+    ping_ts_(0) {
     
     data_size_ = 0;
     offset_ = 0;
@@ -111,9 +116,9 @@ void PeerConnectionClient::Connect() {
   }
 
 
-  LOG(INFO) << "connect...:" << "115.28.44.59:23000";
-  server_address_.SetIP("115.28.44.59");//imnode2.gobelieve.io
-  server_address_.SetPort(23000);
+  LOG(INFO) << "connect...:" << HOST << ":" << PORT;
+  server_address_.SetIP(HOST);
+  server_address_.SetPort(PORT);
 
   rtc::Thread::Current()->PostDelayed(RTC_FROM_HERE, kHeartbeatDelay, this,
                                       1);
@@ -247,6 +252,7 @@ void PeerConnectionClient::SendRTMessage(int64_t peer_id, std::string content) {
 
 void PeerConnectionClient::HandlePong(Message& msg) {
     LOG(INFO) << "pong...";
+    ping_ts_ = 0;
 }
 
 void PeerConnectionClient::OnWrite(rtc::AsyncSocket* socket) {
@@ -278,10 +284,21 @@ void PeerConnectionClient::OnMessage(rtc::Message* msg) {
         if (state_ == NOT_CONNECTED) {
             DoResolveOrConnect();
         } else {
-            SendPing();
+            int64_t now = rtc::TimeMicros();
+            if (ping_ts_ > 0 && now - ping_ts_ > 1000*8) {
+                //8s未收到服务器的pong,断开重连
+                LOG(INFO) << "ping timeout, close socket...";
+                state_ = NOT_CONNECTED;
+                control_socket_->Close();
+                control_socket_.reset(NULL);
+                DoResolveOrConnect();
+            } else {
+                SendPing();
+                ping_ts_ = now;
+            }
             if (state_ != SIGNING_OUT) {
-                rtc::Thread::Current()->PostDelayed(RTC_FROM_HERE, kHeartbeatDelay, this,
-                                                    1);
+                rtc::Thread::Current()->PostDelayed(RTC_FROM_HERE, kHeartbeatDelay,
+                                                    this, 1);
             }
         }
     }

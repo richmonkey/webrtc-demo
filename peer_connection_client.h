@@ -128,6 +128,8 @@ class PeerConnectionClient : public sigslot::has_slots<>,
   int size_;
 
   int seq_;
+
+  int64_t ping_ts_;
 };
 
 #endif  // WEBRTC_EXAMPLES_PEERCONNECTION_CLIENT_PEER_CONNECTION_CLIENT_H_
