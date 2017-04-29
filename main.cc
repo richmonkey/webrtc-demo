@@ -1,6 +1,7 @@
 #include "webrtc/examples/im_client/peer_connection_client.h"
 #include "webrtc/examples/im_client/message.h"
 #include "webrtc/examples/im_client/connection.h"
+#include "webrtc/examples/im_client/load.h"
 
 #include "webrtc/base/ssladapter.h"
 #include "webrtc/base/thread.h"
@@ -29,8 +30,8 @@ struct Camera {
     int port;
 };
 
-const int camera_count = 1;
-Camera cameras[1];
+const int camera_count = 4;
+Camera cameras[4];
 
 
 //检查voip子进程的定时器
@@ -145,7 +146,10 @@ private:
                 pid_t pid = fork();
                 if (pid == 0) {
                     //fork之后必须立刻调用exec
-                    int r = execl("voip", "voip",  "-d", id, "-I", camera.ip, "-P", port, "-u", camera.username, "-p", camera.password, "-c", camera.id, NULL);
+                    int r = execl("voip", "voip",  "-d", id, "-I", camera.ip,
+                                  "-P", port, "-u", camera.username,
+                                  "-p", camera.password, "-c", camera.id,
+                                  "-t", TOKEN, NULL);
                     if (r == -1) {
                         LOG(INFO) << "execl error:" << errno;
                         exit(1);
@@ -189,6 +193,7 @@ private:
         }
 
         connections_.erase(connections_.begin() + position);
+        UpdateCameraList();
     }
 
     int FindConnection(Connection* conn) {
@@ -201,11 +206,23 @@ private:
         return -1;
     }
 
-   
+    void UpdateCameraList() {
+        std::vector<std::string> cameras;
+        for (size_t i = 0; i < connections_.size(); i++) {
+            Connection *c = connections_[i];
+            std::string camera_id = c->GetCameraID();
+            if (!camera_id.empty()) {
+                cameras.push_back(camera_id);
+            }
+        }
+        SetCameraList(cameras);
+    }
+    
     void OnPipeMessage(Connection*conn, Message *msg) {
         if (msg->cmd == MSG_REGISTER_CAMERA) {
             LOG(INFO) << "register camera id:" << msg->camera_id;
             conn->SetCameraID(msg->camera_id);
+            UpdateCameraList();
         } else if (msg->cmd == MSG_RT) {
             LOG(INFO) << "transfer pipe rt message:" << msg->content;
             client_->SendRTMessage(msg->receiver, msg->content);
@@ -225,7 +242,31 @@ int main(int argc, char* argv[]) {
     strcpy(cameras[0].password, "admin");
     cameras[0].port = 80;
 
-  
+    strcpy(cameras[1].id, "camera2");
+    strcpy(cameras[1].ip, "192.168.2.151");
+    strcpy(cameras[1].username, "admin");
+    strcpy(cameras[1].password, "admin");
+    cameras[1].port = 80;
+
+
+    strcpy(cameras[2].id, "camera3");
+    strcpy(cameras[2].ip, "192.168.2.152");
+    strcpy(cameras[2].username, "admin");
+    strcpy(cameras[2].password, "admin");
+    cameras[2].port = 80;
+
+    strcpy(cameras[3].id, "camera4");
+    strcpy(cameras[3].ip, "192.168.2.153");
+    strcpy(cameras[3].username, "admin");
+    strcpy(cameras[3].password, "admin");
+    cameras[3].port = 80;
+
+    
+    
+    
+    std::vector<std::string> cameras;
+    SetCameraList(cameras);
+    
     rtc::AutoThread auto_thread;
     rtc::Thread* thread = rtc::Thread::Current();
     rtc::InitializeSSL();
