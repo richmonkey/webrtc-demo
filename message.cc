@@ -1,7 +1,7 @@
 #include "webrtc/examples/im_client/message.h"
 #include <string.h>
-#include <arpa/inet.h>
 #include <assert.h>
+#include <Winsock2.h>
 
 static int64_t hton64(int64_t val )
 {
@@ -113,15 +113,15 @@ int WriteMessage(char *buf, int size, Message& msg) {
     if (msg.cmd == MSG_AUTH_TOKEN) {
         *p++ = msg.platform_id;
         
-        *p++ = msg.token.length();
+        *p++ = (char)msg.token.length();
         memcpy(p, msg.token.c_str(), msg.token.length());
         p += msg.token.length();
         
-        *p++ = msg.device_id.length();
+        *p++ = (char)msg.device_id.length();
         memcpy(p, msg.device_id.c_str(), msg.device_id.length());
         p += msg.device_id.length();
 
-        body_len = 1 + 1 + msg.token.length() + 1 + msg.device_id.length();
+        body_len = (int)(1 + 1 + msg.token.length() + 1 + msg.device_id.length());
     } else if (msg.cmd == MSG_RT) {
         WriteInt64(p, msg.sender);
         p += 8;
@@ -130,11 +130,11 @@ int WriteMessage(char *buf, int size, Message& msg) {
         memcpy(p, msg.content.c_str(), msg.content.length());
         p += msg.content.length();
 
-        body_len = 8 + 8 + msg.content.length();
+        body_len = (int)(8 + 8 + msg.content.length());
     } else if (msg.cmd == MSG_REGISTER_CAMERA) {
         memcpy(p, msg.camera_id.c_str(), msg.camera_id.length());
         
-        body_len = msg.camera_id.length();
+        body_len = (int)msg.camera_id.length();
     }
     
     //重写消息体长度

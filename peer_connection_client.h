@@ -102,7 +102,6 @@ class PeerConnectionClient : public sigslot::has_slots<>,
 
   void HandlePong(Message& msg);
   void SendAuth();
-  void SendVOIPCommand(int voip_cmd, const std::string& channel_id);
 
   void SendPing();
   bool SendMessage(Message& msg);

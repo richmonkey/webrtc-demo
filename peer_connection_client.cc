@@ -259,8 +259,8 @@ void PeerConnectionClient::OnWrite(rtc::AsyncSocket* socket) {
     if (size_ > 0) {
         size_t sent = control_socket_->Send(block_ + offset_, size_);
         if (sent > 0) {
-            offset_ += sent;
-            size_ -= sent;
+            offset_ += (int)sent;
+            size_ -= (int)sent;
         }
     }
 }
