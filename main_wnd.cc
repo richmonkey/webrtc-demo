@@ -8,19 +8,19 @@
  *  be found in the AUTHORS file in the root of the source tree.
  */
 
-#include "webrtc/examples/im_client/main_wnd.h"
+#include "webrtc/examples/voip/main_wnd.h"
 
 #include <math.h>
 
+#include <rpc.h>
 #include "libyuv/convert_argb.h"
 #include "webrtc/api/video/i420_buffer.h"
 #include "webrtc/base/arraysize.h"
 #include "webrtc/base/checks.h"
 #include "webrtc/base/logging.h"
 #include "webrtc/base/timeutils.h"
-#include "webrtc/examples/im_client/conductor.h"
+#include "webrtc/examples/voip/conductor.h"
 
-#include <rpc.h>
 
 ATOM MainWnd::wnd_class_ = 0;
 const wchar_t MainWnd::kClassName[] = L"WebRTC_MainWnd";
@@ -28,8 +28,7 @@ const wchar_t MainWnd::kClassName[] = L"WebRTC_MainWnd";
 using rtc::sprintfn;
 
 namespace {
-const int kDialDelay = 1000;
-const int kPingDelay = 1000;
+
     
 const char kConnecting[] = "Connecting... ";
 const char kNoVideoStreams[] = "(no video streams either way)";
@@ -73,179 +72,102 @@ void AddListBoxItem(HWND listbox, const std::string& str, LPARAM item_data) {
 }  // namespace
 
 
-
-//voipwnd
-VOIPWnd::VOIPWnd(PeerConnectionClient *client, rtc::Thread* main_thread,
+//mainwnd
+MainWnd::MainWnd(PeerConnectionClient *client, rtc::Thread* main_thread,
                  int64_t uid, std::string& token)
-    :state_(0), client_(client),
-     uid_(uid), token_(token),
-     main_thread_(main_thread),
-     wnd_(NULL) {
-    client_->RegisterObserver(this);
+    : VOIPWnd(client, main_thread, uid, token),
+      ui_(CONNECT_TO_SERVER), edit1_(NULL), edit2_(NULL),
+      label1_(NULL), label2_(NULL), button_(NULL), listbox_(NULL),
+      destroyed_(false), nested_msg_(NULL) {
+    server_ = "127.0.0.1";
+    port_ = "8080";
 }
 
-VOIPWnd::~VOIPWnd() {
-    client_->RegisterObserver(NULL);
+MainWnd::~MainWnd() {
+  RTC_DCHECK(!IsWindow());
 }
 
-void VOIPWnd::OnMessage(rtc::Message* msg) {
-    if (msg->message_id == 1) {
-        if (state_ == VOIP_DIALING) {
-            SendVOIPCommand(peer_id_, VOIP_COMMAND_DIAL_VIDEO, channel_id_);
-            rtc::Thread::Current()->PostDelayed(RTC_FROM_HERE, kDialDelay,
-                                                this, 1);
-        }
-    } else if (msg->message_id == 2) {
-        if (state_ == VOIP_CONNECTED) {
-            uint32_t now = rtc::Time32();
-            if (now - timestamp_ > 10*1000) {
-                LOG(INFO) << "peer:" << peer_id_ << " timeout";
-                OnPeerDisconnected();
-                return;
-            }
-           
-            LOG(INFO) << "send ping command";
-            SendVOIPCommand(peer_id_, VOIP_COMMAND_PING, channel_id_);
-            rtc::Thread::Current()->PostDelayed(RTC_FROM_HERE, kPingDelay,
-                                                this, 2);           
-        }
-    }
+bool MainWnd::Create() {
+  RTC_DCHECK(wnd_ == NULL);
+  if (!RegisterWindowClass())
+    return false;
+
+  ui_thread_id_ = ::GetCurrentThreadId();
+  wnd_ = ::CreateWindowExW(WS_EX_OVERLAPPEDWINDOW, kClassName, L"WebRTC",
+      WS_OVERLAPPEDWINDOW | WS_VISIBLE | WS_CLIPCHILDREN,
+      CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
+      NULL, NULL, GetModuleHandle(NULL), this);
+
+  ::SendMessage(wnd_, WM_SETFONT, reinterpret_cast<WPARAM>(GetDefaultFont()),
+                TRUE);
+
+  CreateChildWindows();
+  SwitchToConnectUI();
+
+  return wnd_ != NULL;
 }
 
-void VOIPWnd::OnPeerConnected() {
-    //on peer connected
-    timestamp_ = rtc::Time32();
-    conductor_ = new rtc::RefCountedObject<Conductor>(client_, handle(),
-                                                      main_thread_, uid_, token_);
-    conductor_->AddRef();
-    conductor_->ConnectToPeer(peer_id_);
+bool MainWnd::Destroy() {
+  BOOL ret = FALSE;
+  if (IsWindow()) {
+    ret = ::DestroyWindow(wnd_);
+  }
+
+  return ret != FALSE;
 }
 
-void VOIPWnd::OnPeerDisconnected() {
-    conductor_->OnPeerDisconnected(peer_id_);
-    conductor_->Release();
-    conductor_  = NULL;
-    state_ = VOIP_HANGED_UP;
-    LOG(INFO) << "peer:" << peer_id_ << " disconnected";    
+bool MainWnd::IsWindow() {
+  return wnd_ && ::IsWindow(wnd_) != FALSE;
 }
 
-void VOIPWnd::HandleVOIPMessage(int64_t sender, int64_t receiver, Json::Value& obj) {
-    int64_t cmd = obj["command"].asInt();
-    std::string channel_id = obj["channel_id"].asString();
-    LOG(INFO) << "voip:" << cmd << " channel:" << channel_id;
-
-
-    if (sender != peer_id_) {
-        return;
-    }
-    if (cmd == VOIP_COMMAND_ACCEPT) {
-        SendVOIPCommand(peer_id_, VOIP_COMMAND_CONNECTED, channel_id_);
-        if (state_ == VOIP_CONNECTED) {
-            return;
-        }
-
-        state_ = VOIP_CONNECTED;
-
-        rtc::Thread::Current()->PostDelayed(RTC_FROM_HERE, kPingDelay,
-                                            this, 2);
-
-        OnPeerConnected();
- 
-    } else if (cmd == VOIP_COMMAND_HANG_UP) {
-        if (state_ == VOIP_CONNECTED) {
-            OnPeerDisconnected();
-        
-        }
-    } else if (cmd == VOIP_COMMAND_PING) {
-        timestamp_ = rtc::Time32();
-    }
-    return;        
+bool MainWnd::PreTranslateMessage(MSG* msg) {
+  bool ret = false;
+  if (msg->message == WM_CHAR) {
+  
+  } else if (msg->hwnd == NULL && msg->message == UI_THREAD_CALLBACK) {
+      ret = true;
+  }
+  return ret;
 }
 
-void VOIPWnd::HandleP2PMessage(int64_t sender, int64_t receiver, Json::Value& obj) {
-    if (state_ == VOIP_CONNECTED) {
-        conductor_->OnMessageFromPeer(sender, rtc::JsonValueToString(obj));
-    }
-}    
+void MainWnd::SwitchToConnectUI() {
+  RTC_DCHECK(IsWindow());
+  LayoutPeerListUI(false);
+  ui_ = CONNECT_TO_SERVER;
+  LayoutConnectUI(true);
+  ::SetFocus(edit1_);
 
-void VOIPWnd::HandleRTMessage(int64_t sender, int64_t receiver, std::string& content) {
-    Json::Reader reader;
-    Json::Value value;
+  if (auto_connect_)
+    ::PostMessage(button_, BM_CLICK, 0, 0);
+}
 
-    if (reader.parse(content, value)) {
-        Json::Value obj;
-        bool r;
-        r = rtc::GetValueFromJsonObject(value, "voip", &obj);
-        if (r) {
-            HandleVOIPMessage(sender, receiver, obj);
-        }
-
-        r = rtc::GetValueFromJsonObject(value, "p2p", &obj);
-        if (r) {
-            LOG(INFO) << "p2p message:" << content;
-            HandleP2PMessage(sender, receiver, obj);
-        }
-    }
+void MainWnd::SwitchToStreamingUI() {
+  LayoutConnectUI(false);
+  LayoutPeerListUI(false);
+  ui_ = STREAMING;
 }
 
 
-void VOIPWnd::OnSignedIn() {
-    LOG(INFO) << "signed in";
-}
+void MainWnd::MessageBox(const char* caption, const char* text, bool is_error) {
+  DWORD flags = MB_OK;
+  if (is_error)
+    flags |= MB_ICONERROR;
 
-void VOIPWnd::OnServerConnectionFailure() {
-    LOG(INFO) << "Failed to connect to server";
-}
-
-void VOIPWnd::OnDisconnected() {
-    LOG(INFO) << "on disconnected";
+  ::MessageBoxA(handle(), text, caption, flags);
 }
 
 
 
+void MainWnd::OnDestroyed() {
+  PostQuitMessage(0);
+}
 
-
-void VOIPWnd::SendVOIPCommand(int64_t peer_id, int voip_cmd,
-                              const std::string& channel_id) {
-    Json::Value value;
-    value["command"] = voip_cmd;
-    value["channel_id"] = channel_id;
- 
-    Json::Value json;
-    json["voip"] = value;
-    std::string s = rtc::JsonValueToString(json);
-    client_->SendRTMessage(peer_id, s);
+void MainWnd::OnDefaultAction() {
+    Dial();
 }
 
 
-void VOIPWnd::Dial() {
-   LOG(INFO) << "connect...";
-
-    if (state_ != VOIP_HANGED_UP && state_ != 0) {
-        return;
-    }
-    
-    ::UUID uuid;
-    UuidCreate(&uuid);
-    char *str;
-    UuidToStringA(&uuid, (RPC_CSTR*)&str);
-    LOG(INFO) << "uuid:" << str;
-    std::string channel_id(str);
-    RpcStringFreeA((RPC_CSTR*)&str);
-
-    //todo input by user
-    int64_t peer_id = 1;
-    SendVOIPCommand(peer_id, VOIP_COMMAND_DIAL_VIDEO, channel_id);
-
-    rtc::Thread::Current()->PostDelayed(RTC_FROM_HERE, kDialDelay,
-                                        this, 1);
-
-    channel_id_ = channel_id;
-    peer_id_ = peer_id;
-    state_ = VOIP_DIALING;    
-}
-
-void VOIPWnd::OnPaint() {
+void MainWnd::OnPaint() {
   PAINTSTRUCT ps;
   ::BeginPaint(handle(), &ps);
 
@@ -345,100 +267,6 @@ void VOIPWnd::OnPaint() {
   ::EndPaint(handle(), &ps);
 }
 
-
-//mainwnd
-MainWnd::MainWnd(PeerConnectionClient *client, rtc::Thread* main_thread,
-                 int64_t uid, std::string& token)
-    : VOIPWnd(client, main_thread, uid, token),
-      ui_(CONNECT_TO_SERVER), edit1_(NULL), edit2_(NULL),
-      label1_(NULL), label2_(NULL), button_(NULL), listbox_(NULL),
-      destroyed_(false), nested_msg_(NULL) {
-    server_ = "127.0.0.1";
-    port_ = "8080";
-}
-
-MainWnd::~MainWnd() {
-  RTC_DCHECK(!IsWindow());
-}
-
-bool MainWnd::Create() {
-  RTC_DCHECK(wnd_ == NULL);
-  if (!RegisterWindowClass())
-    return false;
-
-  ui_thread_id_ = ::GetCurrentThreadId();
-  wnd_ = ::CreateWindowExW(WS_EX_OVERLAPPEDWINDOW, kClassName, L"WebRTC",
-      WS_OVERLAPPEDWINDOW | WS_VISIBLE | WS_CLIPCHILDREN,
-      CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
-      NULL, NULL, GetModuleHandle(NULL), this);
-
-  ::SendMessage(wnd_, WM_SETFONT, reinterpret_cast<WPARAM>(GetDefaultFont()),
-                TRUE);
-
-  CreateChildWindows();
-  SwitchToConnectUI();
-
-  return wnd_ != NULL;
-}
-
-bool MainWnd::Destroy() {
-  BOOL ret = FALSE;
-  if (IsWindow()) {
-    ret = ::DestroyWindow(wnd_);
-  }
-
-  return ret != FALSE;
-}
-
-bool MainWnd::IsWindow() {
-  return wnd_ && ::IsWindow(wnd_) != FALSE;
-}
-
-bool MainWnd::PreTranslateMessage(MSG* msg) {
-  bool ret = false;
-  if (msg->message == WM_CHAR) {
-  
-  } else if (msg->hwnd == NULL && msg->message == UI_THREAD_CALLBACK) {
-      ret = true;
-  }
-  return ret;
-}
-
-void MainWnd::SwitchToConnectUI() {
-  RTC_DCHECK(IsWindow());
-  LayoutPeerListUI(false);
-  ui_ = CONNECT_TO_SERVER;
-  LayoutConnectUI(true);
-  ::SetFocus(edit1_);
-
-  if (auto_connect_)
-    ::PostMessage(button_, BM_CLICK, 0, 0);
-}
-
-void MainWnd::SwitchToStreamingUI() {
-  LayoutConnectUI(false);
-  LayoutPeerListUI(false);
-  ui_ = STREAMING;
-}
-
-
-void MainWnd::MessageBox(const char* caption, const char* text, bool is_error) {
-  DWORD flags = MB_OK;
-  if (is_error)
-    flags |= MB_ICONERROR;
-
-  ::MessageBoxA(handle(), text, caption, flags);
-}
-
-
-
-void MainWnd::OnDestroyed() {
-  PostQuitMessage(0);
-}
-
-void MainWnd::OnDefaultAction() {
-    Dial();
-}
 
 bool MainWnd::OnMessage(UINT msg, WPARAM wp, LPARAM lp, LRESULT* result) {
   switch (msg) {

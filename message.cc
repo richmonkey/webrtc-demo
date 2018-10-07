@@ -1,7 +1,11 @@
-#include "webrtc/examples/im_client/message.h"
+#include "examples/voip/message.h"
 #include <string.h>
 #include <assert.h>
+#ifdef WIN32
 #include <Winsock2.h>
+#else
+#include <arpa/inet.h>
+#endif
 
 static int64_t hton64(int64_t val )
 {

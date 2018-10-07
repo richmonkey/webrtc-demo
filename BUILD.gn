@@ -1,0 +1,148 @@
+# Copyright (c) 2016 The WebRTC project authors. All Rights Reserved.
+#
+# Use of this source code is governed by a BSD-style license
+# that can be found in the LICENSE file in the root of the source
+# tree. An additional intellectual property rights grant can be found
+# in the file PATENTS.  All contributing project authors may
+# be found in the AUTHORS file in the root of the source tree.
+
+import("../../webrtc.gni")
+import("//build/config/sysroot.gni")
+if (is_android) {
+  import("//build/config/android/config.gni")
+  import("//build/config/android/rules.gni")
+} else if (is_mac) {
+  import("//build/config/mac/rules.gni")
+} else if (is_ios) {
+  import("//build/config/ios/rules.gni")
+}
+
+#group("voip") {
+#  # This target shall build all targets in examples.
+#  testonly = true
+#  deps = []
+#  if (is_linux || is_win) {
+#    deps += [
+#      ":voip",
+#    ]
+#  }
+#}
+
+
+if (is_linux) {
+  config("webrtc_stream_warnings_config") {
+    cflags = []
+    if (is_win && is_clang) {
+      cflags += [
+        # Disable warnings failing when compiling with Clang on Windows.
+        # https://bugs.chromium.org/p/webrtc/issues/detail?id=5366
+        "-Wno-format",
+
+        # See https://bugs.chromium.org/p/webrtc/issues/detail?id=6271
+        # for -Wno-reorder and -Wno-sign-compare
+        "-Wno-reorder",
+        "-Wno-sign-compare",
+      ]
+    }
+    if (is_linux && target_cpu == "x86") {
+      cflags += [
+        # Needed to compile on Linux 32-bit.
+        "-Wno-sentinel",
+      ]
+    }
+
+    if (is_clang) {
+      # TODO(ehmaldonado): Make peerconnection_client compile with the standard
+      # set of warnings.
+      # See https://bugs.chromium.org/p/webrtc/issues/detail?id=6306
+      cflags += [ "-Wno-inconsistent-missing-override" ]
+    }
+  }
+}
+
+
+if (is_linux || is_win) {
+  rtc_executable("voip") {
+    testonly = true
+    sources = [
+      "conductor.cc",
+      "conductor.h",
+      "peer_connection_client.cc",
+      "peer_connection_client.h",
+      "message.cc",
+      "message.h",
+      "defaults.cc",
+      "defaults.h",
+      "voip_wnd.cc",
+      "voip_wnd.h",
+    ]
+
+  
+    if (!build_with_chromium && is_clang) {
+      # Suppress warnings from the Chromium Clang plugin (bugs.webrtc.org/163).
+      suppressed_configs += [ "//build/config/clang:find_bad_constructs" ]
+    }
+    
+    deps = [
+      "../../api:libjingle_peerconnection_api",
+      "../../api/video:video_frame_i420",
+      "../../rtc_base:checks",
+      "../../rtc_base:stringutils",
+      "../../rtc_base/third_party/sigslot",
+    ]
+
+    if (is_win) {
+       sources += [
+          "main.cc",
+          "main_wnd.cc",
+          "main_wnd.h",
+          "video_renderer.cc",
+          "video_renderer.h",
+       ]
+       configs += [ "//build/config/win:windowed" ]
+       deps += [ "../media:rtc_media_base" ]       
+    }
+    
+
+
+    if (is_linux) {
+      sources += [
+        "linux/main.cc",
+        "linux/main_wnd.cc",
+        "linux/main_wnd.h",
+      ]    
+      cflags = [ "-Wno-deprecated-declarations" ]
+      libs = [
+        "X11",
+        "Xcomposite",
+        "Xext",
+        "Xrender",
+      ]
+      deps += [ "//build/config/linux/gtk" ]      
+    }
+    
+    configs += [ ":webrtc_stream_warnings_config" ]
+    
+    deps += [
+      "../../api:libjingle_peerconnection_api",
+      "../../api/audio_codecs:builtin_audio_decoder_factory",
+      "../../api/audio_codecs:builtin_audio_encoder_factory",
+      "../../api/video:video_frame",
+      "../../api/video_codecs:builtin_video_decoder_factory",
+      "../../api/video_codecs:builtin_video_encoder_factory",
+      "../../media:rtc_audio_video",
+      "../../modules/audio_device:audio_device",
+      "../../modules/audio_processing:audio_processing",
+      "../../modules/video_capture:video_capture_module",
+      "../../pc:libjingle_peerconnection",
+      "../../rtc_base:rtc_base",
+      "../../rtc_base:rtc_base_approved",
+      "../../rtc_base:rtc_json",
+      "../../system_wrappers:field_trial_default",
+      "../../system_wrappers:metrics_default",
+      "../../system_wrappers:runtime_enabled_features_default",
+      "//third_party/libyuv",
+    ]
+  }
+
+}

@@ -15,10 +15,10 @@
 #include <memory>
 #include <string>
 
-#include "webrtc/base/nethelpers.h"
-#include "webrtc/base/physicalsocketserver.h"
-#include "webrtc/base/signalthread.h"
-#include "webrtc/base/sigslot.h"
+#include "rtc_base/nethelpers.h"
+#include "rtc_base/physicalsocketserver.h"
+#include "rtc_base/signalthread.h"
+#include "rtc_base/third_party/sigslot/sigslot.h"
 
 enum EVOIPCommand {
     //语音通话

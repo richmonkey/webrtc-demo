@@ -1,5 +1,5 @@
-#include "webrtc/examples/im_client/peer_connection_client.h"
-#include "webrtc/examples/im_client/main_wnd.h"
+#include "webrtc/examples/voip/peer_connection_client.h"
+#include "webrtc/examples/voip/main_wnd.h"
 
 #include "webrtc/base/ssladapter.h"
 #include "webrtc/base/thread.h"

@@ -28,81 +28,6 @@
 #include "webrtc/examples/im_client/conductor.h"
 
 
-
-class VOIPWnd : public rtc::MessageHandler,
-    public PeerConnectionClientObserver {
- public:
-
-    VOIPWnd(PeerConnectionClient* client,
-            rtc::Thread* main_thread,
-            int64_t uid, std::string& token);
-
-    virtual ~VOIPWnd();
-    
-    //PeerConnectionObserver implement
-    virtual void OnSignedIn();  
-    virtual void OnDisconnected();
-    virtual void OnServerConnectionFailure();
-    virtual void HandleRTMessage(int64_t sender,
-                                 int64_t receiver,
-                                 std::string& content);
- protected:
-
-    virtual void OnPeerConnected();
-    virtual void OnPeerDisconnected();
-    
-    void SendVOIPCommand(int64_t peer_id, int voip_cmd,
-                         const std::string& channel_id);
-    void OnMessage(rtc::Message* msg);
-
-    void HandleVOIPMessage(int64_t sender, int64_t receiver, Json::Value& obj);
-    void HandleP2PMessage(int64_t sender, int64_t receiver, Json::Value& obj);
-
-
-    void Dial();
-
-    HWND handle() const { return wnd_; }
-
-
-    void OnPaint();
-
-    // A little helper class to make sure we always to proper locking and
-    // unlocking when working with VideoRenderer buffers.
-    template <typename T>
-        class AutoLock {
-    public:
-        explicit AutoLock(T* obj) : obj_(obj) { obj_->Lock(); }
-        ~AutoLock() { obj_->Unlock(); }
-    protected:
-        T* obj_;
-    };
-
-  
-    enum VOIPState {
-        VOIP_DIALING = 1,
-        VOIP_CONNECTED,
-        VOIP_ACCEPTING,
-        VOIP_ACCEPTED,
-        VOIP_REFUSED,
-        VOIP_HANGED_UP,
-        VOIP_SHUTDOWN,
-    };
-  
-    int state_;
-
-    std::string channel_id_;
-    int64_t peer_id_;
-
-    rtc::RefCountedObject<Conductor> *conductor_;
-    PeerConnectionClient *client_;
-    int64_t uid_;
-    std::string token_;
-    rtc::Thread *main_thread_;
-    uint32_t timestamp_; //last received ping timestamp, unit:ms
-    
-    HWND wnd_;    
-};
-
 class MainWnd : public VOIPWnd {
  public:
   static const wchar_t kClassName[];
@@ -149,6 +74,11 @@ class MainWnd : public VOIPWnd {
     LISTBOX_ID,
   };
 
+
+  HWND handle() const { return wnd_; }
+
+  void OnPaint();
+  
   void OnDestroyed();
 
   void OnDefaultAction();
@@ -186,7 +116,8 @@ class MainWnd : public VOIPWnd {
   bool auto_connect_;
   bool auto_call_;
 
-
+   
+  HWND wnd_;   
   
 };
 

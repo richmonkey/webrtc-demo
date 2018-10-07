@@ -1,4 +1,4 @@
-#include "webrtc/examples/im_client/video_renderer.h"
+#include "webrtc/examples/voip/video_renderer.h"
 #include <math.h>
 
 #include "libyuv/convert_argb.h"

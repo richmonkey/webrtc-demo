@@ -8,18 +8,17 @@
  *  be found in the AUTHORS file in the root of the source tree.
  */
 
-#include "webrtc/examples/im_client/peer_connection_client.h"
-#include "webrtc/examples/im_client/message.h"
-
-#include "webrtc/examples/voip/defaults.h"
-#include "webrtc/base/checks.h"
-#include "webrtc/base/logging.h"
-#include "webrtc/base/nethelpers.h"
-#include "webrtc/base/stringutils.h"
-#include "webrtc/base/json.h"
+#include "examples/voip/peer_connection_client.h"
+#include "examples/voip/message.h"
+#include "examples/voip/defaults.h"
+#include "rtc_base/checks.h"
+#include "rtc_base/logging.h"
+#include "rtc_base/nethelpers.h"
+#include "rtc_base/stringutils.h"
+#include "rtc_base/json.h"
 
 #ifdef WIN32
-#include "webrtc/base/win32socketserver.h"
+#include "rtc_base/win32socketserver.h"
 #endif
 
 
@@ -109,14 +108,14 @@ void PeerConnectionClient::RegisterObserver(
 
 void PeerConnectionClient::Connect() {
   if (state_ != NOT_CONNECTED) {
-    LOG(WARNING)
+    RTC_LOG(WARNING)
         << "The client must not be connected before you can call Connect()";
     callback_->OnServerConnectionFailure();
     return;
   }
 
 
-  LOG(INFO) << "connect...:" << HOST << ":" << PORT;
+  RTC_LOG(INFO) << "connect...:" << HOST << ":" << PORT;
   server_address_.SetIP(HOST);
   server_address_.SetPort(PORT);
 
@@ -155,7 +154,7 @@ void PeerConnectionClient::DoConnect() {
   control_socket_.reset(CreateClientSocket(server_address_.ipaddr().family()));
   InitSocketSignals();
 
-  LOG(INFO) << "connect control socket....";
+  RTC_LOG(INFO) << "connect control socket....";
   bool ret = ConnectControlSocket();
   if (ret)
     state_ = SIGNING_IN;
@@ -198,7 +197,7 @@ bool PeerConnectionClient::ConnectControlSocket() {
 
 void PeerConnectionClient::OnConnect(rtc::AsyncSocket* socket) {
     state_ = CONNECTED;
-    LOG(INFO) << "on connected";
+    RTC_LOG(INFO) << "on connected";
     SendAuth();
 }
 
@@ -218,11 +217,11 @@ void PeerConnectionClient::OnRead(rtc::AsyncSocket* socket) {
             break;
         }
 
-        LOG(INFO) << "recv message:" << m.cmd;
+        RTC_LOG(INFO) << "recv message:" << m.cmd;
         offset += m.length + HEADER_SIZE;
         //处理消息
         if (m.cmd == MSG_AUTH_STATUS) {
-            LOG(INFO) << "auth status:" << m.status;
+            RTC_LOG(INFO) << "auth status:" << m.status;
             callback_->OnSignedIn();
         } else if (m.cmd == MSG_RT) {
             callback_->HandleRTMessage(m.sender, m.receiver, m.content);
@@ -251,7 +250,7 @@ void PeerConnectionClient::SendRTMessage(int64_t peer_id, std::string content) {
 
 
 void PeerConnectionClient::HandlePong(Message& msg) {
-    LOG(INFO) << "pong...";
+    RTC_LOG(INFO) << "pong...";
     ping_ts_ = 0;
 }
 
@@ -266,11 +265,11 @@ void PeerConnectionClient::OnWrite(rtc::AsyncSocket* socket) {
 }
 
 void PeerConnectionClient::OnClose(rtc::AsyncSocket* socket, int err) {
-  LOG(INFO) << __FUNCTION__ << "error:" << err;
+  RTC_LOG(INFO) << __FUNCTION__ << "error:" << err;
   state_ = NOT_CONNECTED;
   socket->Close();
   
-  LOG(WARNING) << "Connection refused; retrying in 2 seconds";
+  RTC_LOG(WARNING) << "Connection refused; retrying in 2 seconds";
   rtc::Thread::Current()->PostDelayed(RTC_FROM_HERE, kReconnectDelay, this,
                                       0);
 }
@@ -287,7 +286,7 @@ void PeerConnectionClient::OnMessage(rtc::Message* msg) {
             int64_t now = rtc::TimeMicros();
             if (ping_ts_ > 0 && now - ping_ts_ > 1000*8) {
                 //8s未收到服务器的pong,断开重连
-                LOG(INFO) << "ping timeout, close socket...";
+                RTC_LOG(INFO) << "ping timeout, close socket...";
                 state_ = NOT_CONNECTED;
                 control_socket_->Close();
                 control_socket_.reset(NULL);
@@ -360,6 +359,6 @@ void PeerConnectionClient::SendAuth() {
 void PeerConnectionClient::SendPing() {
   Message m;
   m.cmd = MSG_PING;
-  LOG(INFO) << "ping...";
+  RTC_LOG(INFO) << "ping...";
   SendMessage(m);
 }

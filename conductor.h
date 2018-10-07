@@ -17,11 +17,11 @@
 #include <set>
 #include <string>
 
-#include "webrtc/api/mediastreaminterface.h"
-#include "webrtc/api/peerconnectioninterface.h"
-#include "webrtc/examples/im_client/peer_connection_client.h"
-#include "webrtc/examples/im_client/video_renderer.h"
-#include "webrtc/base/win32.h"
+#include "api/mediastreaminterface.h"
+#include "api/peerconnectioninterface.h"
+#include "examples/voip/peer_connection_client.h"
+//#include "examples/voip/video_renderer.h"
+//#include "base/win32.h"
 
 namespace webrtc {
 class VideoCaptureModule;
@@ -44,7 +44,6 @@ class Conductor
   };
 
   Conductor(PeerConnectionClient* client,
-            HWND hwnd,
             rtc::Thread* main_thread,
             int64_t uid,
             std::string& token);
@@ -60,22 +59,29 @@ class Conductor
   void OnServerConnectionFailure();
 
 
-  VideoRenderer* GetLocalRenderer() {
-      return local_renderer_.get();
-  }
+  //VideoRenderer* GetLocalRenderer() {
+  //    return local_renderer_.get();
+  //}
+  // 
+  //VideoRenderer* GetRemoteRenderer() {
+  //    return remote_renderer_.get();
+  //}
 
-  VideoRenderer* GetRemoteRenderer() {
-      return remote_renderer_.get();
+  void SetLocalRenderer(rtc::VideoSinkInterface<webrtc::VideoFrame>* render) {
+     local_renderer_ = render;
+  }
+  
+  void SetRemoteRenderer(rtc::VideoSinkInterface<webrtc::VideoFrame>* render) {
+      remote_renderer_ = render;
   }
   
  protected:
   ~Conductor();
   bool InitializePeerConnection();
-  bool ReinitializePeerConnectionForLoopback();
   bool CreatePeerConnection(bool dtls);
   void DeletePeerConnection();
   void EnsureStreamingUI();
-  void AddStreams();
+  void AddTracks();
   std::unique_ptr<cricket::VideoCapturer> OpenVideoCaptureDevice();
 
   void StartLocalRenderer(webrtc::VideoTrackInterface* local_video);
@@ -122,12 +128,8 @@ class Conductor
   rtc::scoped_refptr<webrtc::PeerConnectionFactoryInterface>
       peer_connection_factory_;
   PeerConnectionClient* client_;
-
-  HWND hwnd_;
  
   std::deque<std::string*> pending_messages_;
-  std::map<std::string, rtc::scoped_refptr<webrtc::MediaStreamInterface> >
-      active_streams_;
   std::string server_;
 
   rtc::Thread *main_thread_;
@@ -139,8 +141,13 @@ class Conductor
   int64_t uid_;
   std::string token_;
 
-  std::unique_ptr<VideoRenderer> local_renderer_;
-  std::unique_ptr<VideoRenderer> remote_renderer_;  
+  rtc::scoped_refptr<webrtc::VideoTrackInterface>  local_video_track_;
+  rtc::scoped_refptr<webrtc::VideoTrackInterface>  remote_video_track_;  
+  
+  rtc::VideoSinkInterface<webrtc::VideoFrame>* local_renderer_;
+  rtc::VideoSinkInterface<webrtc::VideoFrame>* remote_renderer_;  
+  //  std::unique_ptr<VideoRenderer> local_renderer_;
+  //  std::unique_ptr<VideoRenderer> remote_renderer_;  
   
 };
 
