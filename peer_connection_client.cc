@@ -13,9 +13,10 @@
 #include "examples/voip/defaults.h"
 #include "rtc_base/checks.h"
 #include "rtc_base/logging.h"
-#include "rtc_base/nethelpers.h"
-#include "rtc_base/stringutils.h"
-#include "rtc_base/json.h"
+#include "rtc_base/net_helpers.h"
+#include "rtc_base/string_utils.h"
+#include "rtc_base/time_utils.h"
+#include "rtc_base/strings/json.h"
 
 #ifdef WIN32
 #include "rtc_base/win32socketserver.h"
@@ -25,7 +26,7 @@
 #define HOST "115.28.44.59" //imnode2.gobelieve.io
 #define PORT 23000
 
-using rtc::sprintfn;
+//using rtc::sprintfn;
 
 namespace {
 
@@ -55,7 +56,8 @@ rtc::AsyncSocket* CreateClientSocket(int family) {
 
 
 PeerConnectionClient::PeerConnectionClient()
-  : resolver_(NULL),
+    : callback_(NULL),
+    resolver_(NULL),
     state_(NOT_CONNECTED),
     my_id_(-1),
     ping_ts_(0) {
@@ -245,6 +247,7 @@ void PeerConnectionClient::SendRTMessage(int64_t peer_id, std::string content) {
     m.sender = my_id_;
     m.receiver = peer_id;
     m.content = content;
+    RTC_LOG(INFO) << "send rt message:" << content;
     SendMessage(m);    
 }
 

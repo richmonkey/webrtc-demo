@@ -14,11 +14,11 @@
 #include "examples/voip/linux/main_wnd.h"
 #include "examples/voip/peer_connection_client.h"
 
-#include "rtc_base/ssladapter.h"
+#include "rtc_base/ssl_adapter.h"
 #include "rtc_base/thread.h"
 
-
-#define TOKEN "5DfJ5EeMtxDdCYiivzKV9SmmIuOiUb"
+#define TOKEN "GVVthnUUWAmjlTdsAeHhkyuTf2DIIj"
+//#define TOKEN "5DfJ5EeMtxDdCYiivzKV9SmmIuOiUb"
 #define ID 10
 
 
@@ -28,13 +28,12 @@ class CustomSocketServer : public rtc::PhysicalSocketServer {
       : wnd_(NULL), client_(NULL) {}
   virtual ~CustomSocketServer() {}
 
-  void SetMessageQueue(rtc::MessageQueue* queue) override {
-    message_queue_ = queue;
-  }
+  void SetMessageQueue(rtc::Thread* queue) override { message_queue_ = queue; }    
 
-    void set_wnd(GtkMainWnd *wnd) {
+
+  void set_wnd(GtkMainWnd *wnd) {
         wnd_ = wnd;
-    }
+  }
   void set_client(PeerConnectionClient* client) { client_ = client; }
 
   // Override so that we can also pump the GTK message loop.
@@ -57,7 +56,7 @@ class CustomSocketServer : public rtc::PhysicalSocketServer {
   }
 
  protected:
-  rtc::MessageQueue* message_queue_;
+  rtc::Thread* message_queue_;    
   GtkMainWnd* wnd_;
   PeerConnectionClient* client_;
 };

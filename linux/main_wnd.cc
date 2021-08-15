@@ -17,12 +17,22 @@
 #include "api/video/i420_buffer.h"
 #include "rtc_base/checks.h"
 #include "rtc_base/logging.h"
-#include "rtc_base/stringutils.h"
+//#include "rtc_base/strings/stringutils.h"
+#include "third_party/libyuv/include/libyuv/convert_from.h"
+
+
+#include "api/video/i420_buffer.h"
+#include "api/video/video_frame_buffer.h"
+#include "api/video/video_rotation.h"
+#include "api/video/video_source_interface.h"
+#include "rtc_base/checks.h"
+#include "rtc_base/logging.h"
+#include "third_party/libyuv/include/libyuv/convert.h"
 #include "third_party/libyuv/include/libyuv/convert_from.h"
 
 #include "examples/voip/defaults.h"
 
-using rtc::sprintfn;
+//using rtc::sprintfn;
 
 namespace {
 
@@ -64,6 +74,7 @@ gboolean HandleUIThreadCallback(gpointer data) {
   delete cb_data;
   return false;
 }
+
 
 gboolean Redraw(gpointer data) {
   GtkMainWnd* wnd = reinterpret_cast<GtkMainWnd*>(data);
@@ -333,6 +344,12 @@ void GtkMainWnd::OnRedraw() {
       draw_buffer_.reset(new uint8_t[draw_buffer_size_]);
       gtk_widget_set_size_request(draw_area_, width_ * 2, height_ * 2);
     }
+    
+    if (draw_buffer_size_ != (width_ * height_ * 4) * 4) {
+        draw_buffer_size_ = (width_ * height_ * 4) * 4;
+        draw_buffer_.reset(new uint8_t[draw_buffer_size_]);
+        gtk_widget_set_size_request(draw_area_, width_ * 2, height_ * 2);
+    }
 
     const uint32_t* image =
         reinterpret_cast<const uint32_t*>(remote_renderer->image());
@@ -355,6 +372,7 @@ void GtkMainWnd::OnRedraw() {
     if (local_renderer && local_renderer->image()) {
       image = reinterpret_cast<const uint32_t*>(local_renderer->image());
       scaled = reinterpret_cast<uint32_t*>(draw_buffer_.get());
+      #if 0
       // Position the local preview on the right side.
       scaled += (width_ * 2) - (local_renderer->width() / 2);
       // right margin...
@@ -364,6 +382,7 @@ void GtkMainWnd::OnRedraw() {
                                           (local_renderer->width() / 2) * 4);
       // bottom margin...
       scaled -= (width_ * 2) * 5;
+      #endif
       for (int r = 0; r < local_renderer->height(); r += 2) {
         for (int c = 0; c < local_renderer->width(); c += 2) {
           scaled[c / 2] = image[c + r * local_renderer->width()];
@@ -412,7 +431,7 @@ GtkMainWnd::VideoRenderer::~VideoRenderer() {
 }
 
 void GtkMainWnd::VideoRenderer::SetSize(int width, int height) {
-    //gdk_threads_enter();
+  gdk_threads_enter();
 
   if (width_ == width && height_ == height) {
     return;
@@ -421,13 +440,13 @@ void GtkMainWnd::VideoRenderer::SetSize(int width, int height) {
   width_ = width;
   height_ = height;
   image_.reset(new uint8_t[width * height * 4]);
-  //gdk_threads_leave();
+  gdk_threads_leave();
 }
 
 void GtkMainWnd::VideoRenderer::OnFrame(const webrtc::VideoFrame& video_frame) {
   gdk_threads_enter();
 
-  RTC_LOG(INFO) << "video render on frame"; 
+  RTC_LOG(INFO) << "video render on frame";
   
   rtc::scoped_refptr<webrtc::I420BufferInterface> buffer(
       video_frame.video_frame_buffer()->ToI420());
@@ -446,12 +465,7 @@ void GtkMainWnd::VideoRenderer::OnFrame(const webrtc::VideoFrame& video_frame) {
                      buffer->StrideU(), buffer->DataV(), buffer->StrideV(),
                      image_.get(), width_ * 4, buffer->width(),
                      buffer->height());
-  /*
-  libyuv::I420ToABGR(buffer->DataY(), buffer->StrideY(), buffer->DataU(),
-                     buffer->StrideU(), buffer->DataV(), buffer->StrideV(),
-                     image_.get(), width_ * 4, buffer->width(),
-                     buffer->height());
-  */
+
   gdk_threads_leave();
 
   g_idle_add(Redraw, main_wnd_);

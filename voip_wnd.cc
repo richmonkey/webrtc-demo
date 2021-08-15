@@ -17,7 +17,7 @@
 #include "rtc_base/arraysize.h"
 #include "rtc_base/checks.h"
 #include "rtc_base/logging.h"
-#include "rtc_base/timeutils.h"
+#include "rtc_base/time_utils.h"
 
 #include "examples/voip/conductor.h"
 
@@ -33,6 +33,7 @@ VOIPWnd::VOIPWnd(PeerConnectionClient *client, rtc::Thread* main_thread,
     :state_(0), client_(client),
      uid_(uid), token_(token),
      main_thread_(main_thread) {
+    RTC_LOG(INFO) << "register observer...";
     client_->RegisterObserver(this);
 }
 
@@ -62,6 +63,10 @@ void VOIPWnd::OnMessage(rtc::Message* msg) {
             rtc::Thread::Current()->PostDelayed(RTC_FROM_HERE, kPingDelay,
                                                 this, 2);           
         }
+    } else if (msg->message_id == 3) {
+        OnPeerConnected();
+    } else if (msg->message_id == 4) {
+        OnPeerDisconnected();
     }
 }
 
@@ -106,12 +111,13 @@ void VOIPWnd::HandleVOIPMessage(int64_t sender, int64_t receiver, Json::Value& o
         rtc::Thread::Current()->PostDelayed(RTC_FROM_HERE, kPingDelay,
                                             this, 2);
 
-        OnPeerConnected();
+        rtc::Thread::Current()->Post(RTC_FROM_HERE, this, 3);
+     
  
     } else if (cmd == VOIP_COMMAND_HANG_UP) {
         if (state_ == VOIP_CONNECTED) {
-            OnPeerDisconnected();
-        
+            rtc::Thread::Current()->Post(RTC_FROM_HERE, this, 4);
+         
         }
     } else if (cmd == VOIP_COMMAND_PING) {
         timestamp_ = rtc::Time32();
@@ -169,6 +175,7 @@ void VOIPWnd::SendVOIPCommand(int64_t peer_id, int voip_cmd,
     Json::Value json;
     json["voip"] = value;
     std::string s = rtc::JsonValueToString(json);
+    //todo fix json bug
     client_->SendRTMessage(peer_id, s);
 }
 

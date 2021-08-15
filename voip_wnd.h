@@ -16,11 +16,11 @@
 #include <memory>
 #include <string>
 
-#include "api/mediastreaminterface.h"
+#include "api/media_stream_interface.h"
 #include "api/video/video_frame.h"
-#include "rtc_base/json.h"
-#include "media/base/mediachannel.h"
-#include "media/base/videocommon.h"
+#include "rtc_base/strings/json.h"
+#include "media/base/media_channel.h"
+#include "media/base/video_common.h"
 #include "examples/voip/peer_connection_client.h"
 #include "examples/voip/conductor.h"
 

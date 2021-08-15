@@ -17,8 +17,8 @@
 #include <set>
 #include <string>
 
-#include "api/mediastreaminterface.h"
-#include "api/peerconnectioninterface.h"
+#include "api/media_stream_interface.h"
+#include "api/peer_connection_interface.h"
 #include "examples/voip/peer_connection_client.h"
 //#include "examples/voip/video_renderer.h"
 //#include "base/win32.h"
@@ -82,7 +82,6 @@ class Conductor
   void DeletePeerConnection();
   void EnsureStreamingUI();
   void AddTracks();
-  std::unique_ptr<cricket::VideoCapturer> OpenVideoCaptureDevice();
 
   void StartLocalRenderer(webrtc::VideoTrackInterface* local_video);
   void StopLocalRenderer();
@@ -94,25 +93,33 @@ class Conductor
   //
 
   void OnSignalingChange(
-      webrtc::PeerConnectionInterface::SignalingState new_state) override{};
+      webrtc::PeerConnectionInterface::SignalingState new_state) override{}
   void OnAddStream(
       rtc::scoped_refptr<webrtc::MediaStreamInterface> stream) override;
   void OnRemoveStream(
       rtc::scoped_refptr<webrtc::MediaStreamInterface> stream) override;
+
+  void OnTrack(
+      rtc::scoped_refptr<webrtc::RtpTransceiverInterface> transceiver) override;
+
+  void OnAddTrack(
+      rtc::scoped_refptr<webrtc::RtpReceiverInterface> receiver,
+      const std::vector<rtc::scoped_refptr<webrtc::MediaStreamInterface>>& streams) override;
+    
   void OnDataChannel(
       rtc::scoped_refptr<webrtc::DataChannelInterface> channel) override {}
   void OnRenegotiationNeeded() override {}
   void OnIceConnectionChange(
-      webrtc::PeerConnectionInterface::IceConnectionState new_state) override{};
+      webrtc::PeerConnectionInterface::IceConnectionState new_state) override{}
   void OnIceGatheringChange(
-      webrtc::PeerConnectionInterface::IceGatheringState new_state) override{};
+      webrtc::PeerConnectionInterface::IceGatheringState new_state) override{}
   void OnIceCandidate(const webrtc::IceCandidateInterface* candidate) override;
   void OnIceConnectionReceivingChange(bool receiving) override {}
 
 
   // CreateSessionDescriptionObserver implementation.
   void OnSuccess(webrtc::SessionDescriptionInterface* desc) override;
-  void OnFailure(const std::string& error) override;
+  void OnFailure(webrtc::RTCError error) override;
 
   // implements the MessageHandler interface
   void OnMessage(rtc::Message* msg);

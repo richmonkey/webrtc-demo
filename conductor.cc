@@ -14,18 +14,21 @@
 #include <utility>
 #include <vector>
 
-#include "api/test/fakeconstraints.h"
-
 #include "api/audio_codecs/builtin_audio_decoder_factory.h"
 #include "api/audio_codecs/builtin_audio_encoder_factory.h"
 #include "api/video_codecs/builtin_video_decoder_factory.h"
 #include "api/video_codecs/builtin_video_encoder_factory.h"
+#include "api/create_peerconnection_factory.h"
 
 #include "rtc_base/checks.h"
-#include "rtc_base/json.h"
+#include "rtc_base/strings/json.h"
 #include "rtc_base/logging.h"
-#include "media/engine/webrtcvideocapturerfactory.h"
+#include "pc/video_track_source.h"
+#include "modules/audio_device/include/audio_device.h"
+#include "modules/audio_processing/include/audio_processing.h"
+#include "modules/video_capture/video_capture.h"
 #include "modules/video_capture/video_capture_factory.h"
+#include "test/vcm_capturer.h"
 #include "examples/voip/defaults.h"
 
 
@@ -58,14 +61,72 @@ class DummySetSessionDescriptionObserver
   virtual void OnSuccess() {
     RTC_LOG(INFO) << __FUNCTION__;
   }
-  virtual void OnFailure(const std::string& error) {
-    RTC_LOG(INFO) << __FUNCTION__ << " " << error;
-  }
+
+
+  virtual void OnFailure(webrtc::RTCError error) {
+    RTC_LOG(LERROR) << ToString(error.type()) << ": " << error.message();
+  }    
 
  protected:
   DummySetSessionDescriptionObserver() {}
   ~DummySetSessionDescriptionObserver() {}
 };
+
+
+class DummyAudioTrackSink : public webrtc::AudioTrackSinkInterface {
+public:
+    DummyAudioTrackSink(const std::string& name): name_(name) {}
+    virtual void OnData(const void* audio_data,
+                        int bits_per_sample,
+                        int sample_rate,
+                        size_t number_of_channels,
+                        size_t number_of_frames) {
+        RTC_LOG(INFO) << "audio track: " << name_ << " number of frames:" << number_of_frames;
+    }
+
+private:
+    const std::string name_;
+    
+};
+
+
+class CapturerTrackSource : public webrtc::VideoTrackSource {
+ public:
+  static rtc::scoped_refptr<CapturerTrackSource> Create() {
+    const size_t kWidth = 640;
+    const size_t kHeight = 480;
+    const size_t kFps = 30;
+    std::unique_ptr<webrtc::test::VcmCapturer> capturer;
+    std::unique_ptr<webrtc::VideoCaptureModule::DeviceInfo> info(
+        webrtc::VideoCaptureFactory::CreateDeviceInfo());
+    if (!info) {
+      return nullptr;
+    }
+    int num_devices = info->NumberOfDevices();
+    for (int i = 0; i < num_devices; ++i) {
+      capturer = absl::WrapUnique(
+          webrtc::test::VcmCapturer::Create(kWidth, kHeight, kFps, i));
+      if (capturer) {
+        return new rtc::RefCountedObject<CapturerTrackSource>(
+            std::move(capturer));
+      }
+    }
+
+    return nullptr;
+  }
+
+ protected:
+  explicit CapturerTrackSource(
+      std::unique_ptr<webrtc::test::VcmCapturer> capturer)
+      : VideoTrackSource(/*remote=*/false), capturer_(std::move(capturer)) {}
+
+ private:
+  rtc::VideoSourceInterface<webrtc::VideoFrame>* source() override {
+    return capturer_.get();
+  }
+  std::unique_ptr<webrtc::test::VcmCapturer> capturer_;
+};
+
 
 Conductor::Conductor(PeerConnectionClient* client,
                      rtc::Thread* main_thread,
@@ -120,15 +181,16 @@ bool Conductor::InitializePeerConnection() {
 //      nullptr /* audio_processing */);
 
 
-  peer_connection_factory_ = webrtc::CreatePeerConnectionFactory( _networkThread.get(),
-                                                                  _workerThread.get(),
-                                                                  _signalingThread.get(),
-                                                                  nullptr,
-                                                                  webrtc::CreateBuiltinAudioEncoderFactory(),
-                                                                  webrtc::CreateBuiltinAudioDecoderFactory(),
-                                                                  webrtc::CreateBuiltinVideoEncoderFactory(),
-                                                                  webrtc::CreateBuiltinVideoDecoderFactory(),
-                                                                  nullptr, nullptr);
+  peer_connection_factory_ = webrtc::CreatePeerConnectionFactory(
+      _networkThread.get(),
+      _workerThread.get(),
+      _signalingThread.get(),
+      nullptr,
+      webrtc::CreateBuiltinAudioEncoderFactory(),
+      webrtc::CreateBuiltinAudioDecoderFactory(),
+      webrtc::CreateBuiltinVideoEncoderFactory(),
+      webrtc::CreateBuiltinVideoDecoderFactory(),
+      nullptr, nullptr);
 
   
   //peer_connection_factory_  = webrtc::CreatePeerConnectionFactory();
@@ -234,6 +296,26 @@ void Conductor::OnRemoveStream(
   main_thread_->Post(RTC_FROM_HERE, this, STREAM_REMOVED, new MessageData(stream.release()));
 }
 
+void Conductor::OnTrack(
+    rtc::scoped_refptr<webrtc::RtpTransceiverInterface> transceiver) {
+    RTC_LOG(INFO) << "ontrack...";
+    rtc::scoped_refptr<webrtc::MediaStreamTrackInterface> track = transceiver->receiver()->track();
+    if (track->kind() == "audio") {
+        webrtc::AudioTrackInterface *audio_track = (webrtc::AudioTrackInterface*)track.get();
+        //memoery leak
+        auto sink = new DummyAudioTrackSink(std::string("remote"));        
+        audio_track->AddSink(sink);
+    }
+}
+
+void Conductor::OnAddTrack(
+      rtc::scoped_refptr<webrtc::RtpReceiverInterface> receiver,
+      const std::vector<rtc::scoped_refptr<webrtc::MediaStreamInterface>>& streams) {
+
+    RTC_LOG(INFO) << "on add track 222";
+}
+    
+
 void Conductor::OnIceCandidate(const webrtc::IceCandidateInterface* candidate) {
   RTC_LOG(INFO) << __FUNCTION__ << " " << candidate->sdp_mline_index();
   // For loopback test. To save some connecting delay.
@@ -264,6 +346,8 @@ void Conductor::OnPeerConnected(int id, const std::string& name) {
     if (!peer_connection_.get()) {
         RTC_DCHECK(peer_id_ == -1);
         peer_id_ = id;
+
+        RTC_LOG(INFO) << "initialize peer connection";
 
         if (!InitializePeerConnection()) {
             RTC_LOG(LS_ERROR) << "Failed to initialize our PeerConnection instance";
@@ -385,35 +469,7 @@ void Conductor::ConnectToPeer(int peer_id) {
     }
 }
 
-std::unique_ptr<cricket::VideoCapturer> Conductor::OpenVideoCaptureDevice() {
-    std::vector<std::string> device_names;
-    {
-        std::unique_ptr<webrtc::VideoCaptureModule::DeviceInfo> info(webrtc::VideoCaptureFactory::CreateDeviceInfo());
-        if (!info) {
-            return nullptr;
-        }
-        int num_devices = info->NumberOfDevices();
-        for (int i = 0; i < num_devices; ++i) {
-            const uint32_t kSize = 256;
-            char name[kSize] = {0};
-            char id[kSize] = {0};
-            if (info->GetDeviceName(i, name, kSize, id, kSize) != -1) {
-                device_names.push_back(name);
-            }
-        }
-    }
-  
-    cricket::WebRtcVideoDeviceCapturerFactory factory;
-    std::unique_ptr<cricket::VideoCapturer> capturer;
-    for (const auto& name : device_names) {
-        capturer = factory.Create(cricket::Device(name, 0));
-        if (capturer) {
-            break;
-        }
-    }
-  
-    return capturer;
-}
+
 void Conductor::AddTracks() {
   if (!peer_connection_->GetSenders().empty()) {
     return;  // Already added tracks.
@@ -429,14 +485,15 @@ void Conductor::AddTracks() {
                       << result_or_error.error().message();
   }
 
-  std::unique_ptr<cricket::VideoCapturer> video_device =
-      OpenVideoCaptureDevice();
+  //memoery leak
+  auto sink = new DummyAudioTrackSink(std::string("local"));
+  audio_track->AddSink(sink);
+
+  rtc::scoped_refptr<CapturerTrackSource> video_device =
+      CapturerTrackSource::Create();
   if (video_device) {
     rtc::scoped_refptr<webrtc::VideoTrackInterface> video_track(
-        peer_connection_factory_->CreateVideoTrack(
-            kVideoLabel, peer_connection_factory_->CreateVideoSource(
-                             std::move(video_device), nullptr)));
-
+        peer_connection_factory_->CreateVideoTrack(kVideoLabel, video_device));
     StartLocalRenderer(video_track);
 
     result_or_error = peer_connection_->AddTrack(video_track, {kStreamId});
@@ -448,8 +505,6 @@ void Conductor::AddTracks() {
     RTC_LOG(LS_ERROR) << "OpenVideoCaptureDevice failed";
   }
 }
-
-
 
 
 void Conductor::OnMessage(rtc::Message* msg) {
@@ -526,7 +581,7 @@ bool Conductor::SendToPeer(const std::string& message) {
     Json::Value json;
     json["p2p"] = value;
     std::string s = rtc::JsonValueToString(json);
-
+    //todo fix json bug
     client_->SendRTMessage(peer_id_, s);
     return true;
 }
@@ -549,8 +604,9 @@ void Conductor::OnSuccess(webrtc::SessionDescriptionInterface* desc) {
   SendMessage(writer.write(jmessage));
 }
 
-void Conductor::OnFailure(const std::string& error) {
-    RTC_LOG(LERROR) << error;
+
+void Conductor::OnFailure(webrtc::RTCError error) {
+  RTC_LOG(LERROR) << ToString(error.type()) << ": " << error.message();
 }
 
 void Conductor::SendMessage(const std::string& json_object) {

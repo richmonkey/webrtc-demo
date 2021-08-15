@@ -80,15 +80,17 @@ if (is_linux || is_win) {
   
     if (!build_with_chromium && is_clang) {
       # Suppress warnings from the Chromium Clang plugin (bugs.webrtc.org/163).
-      suppressed_configs += [ "//build/config/clang:find_bad_constructs" ]
+      #suppressed_configs += [ "//build/config/clang:find_bad_constructs" ]
     }
     
     deps = [
-      "../../api:libjingle_peerconnection_api",
-      "../../api/video:video_frame_i420",
-      "../../rtc_base:checks",
-      "../../rtc_base:stringutils",
-      "../../rtc_base/third_party/sigslot",
+        "//:webrtc",
+        "//rtc_base:rtc_json",
+        "//rtc_base:checks",
+        "//rtc_base:net_helpers",
+        "//rtc_base:threading",
+        "//rtc_base:net_helpers",
+        "//test:platform_video_capturer",        
     ]
 
     if (is_win) {
@@ -100,7 +102,7 @@ if (is_linux || is_win) {
           "video_renderer.h",
        ]
        configs += [ "//build/config/win:windowed" ]
-       deps += [ "../media:rtc_media_base" ]       
+     
     }
     
 
@@ -123,26 +125,7 @@ if (is_linux || is_win) {
     
     configs += [ ":webrtc_stream_warnings_config" ]
     
-    deps += [
-      "../../api:libjingle_peerconnection_api",
-      "../../api/audio_codecs:builtin_audio_decoder_factory",
-      "../../api/audio_codecs:builtin_audio_encoder_factory",
-      "../../api/video:video_frame",
-      "../../api/video_codecs:builtin_video_decoder_factory",
-      "../../api/video_codecs:builtin_video_encoder_factory",
-      "../../media:rtc_audio_video",
-      "../../modules/audio_device:audio_device",
-      "../../modules/audio_processing:audio_processing",
-      "../../modules/video_capture:video_capture_module",
-      "../../pc:libjingle_peerconnection",
-      "../../rtc_base:rtc_base",
-      "../../rtc_base:rtc_base_approved",
-      "../../rtc_base:rtc_json",
-      "../../system_wrappers:field_trial_default",
-      "../../system_wrappers:metrics_default",
-      "../../system_wrappers:runtime_enabled_features_default",
-      "//third_party/libyuv",
-    ]
+
   }
 
 }
