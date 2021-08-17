@@ -1,1 +1,7 @@
 *~
+build
+tools
+build_overrides
+buildtools
+third_party
+out

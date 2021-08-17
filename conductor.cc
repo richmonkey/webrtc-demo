@@ -8,7 +8,7 @@
  *  be found in the AUTHORS file in the root of the source tree.
  */
 
-#include "examples/voip/conductor.h"
+#include "conductor.h"
 
 #include <memory>
 #include <utility>
@@ -28,8 +28,8 @@
 #include "modules/audio_processing/include/audio_processing.h"
 #include "modules/video_capture/video_capture.h"
 #include "modules/video_capture/video_capture_factory.h"
-#include "test/vcm_capturer.h"
-#include "examples/voip/defaults.h"
+#include "vcm_capturer.h"
+#include "defaults.h"
 
 
 // Names used for a IceCandidate JSON object.
@@ -96,7 +96,7 @@ class CapturerTrackSource : public webrtc::VideoTrackSource {
     const size_t kWidth = 640;
     const size_t kHeight = 480;
     const size_t kFps = 30;
-    std::unique_ptr<webrtc::test::VcmCapturer> capturer;
+    std::unique_ptr<VcmCapturer> capturer;
     std::unique_ptr<webrtc::VideoCaptureModule::DeviceInfo> info(
         webrtc::VideoCaptureFactory::CreateDeviceInfo());
     if (!info) {
@@ -105,7 +105,7 @@ class CapturerTrackSource : public webrtc::VideoTrackSource {
     int num_devices = info->NumberOfDevices();
     for (int i = 0; i < num_devices; ++i) {
       capturer = absl::WrapUnique(
-          webrtc::test::VcmCapturer::Create(kWidth, kHeight, kFps, i));
+          VcmCapturer::Create(kWidth, kHeight, kFps, i));
       if (capturer) {
         return new rtc::RefCountedObject<CapturerTrackSource>(
             std::move(capturer));
@@ -117,14 +117,14 @@ class CapturerTrackSource : public webrtc::VideoTrackSource {
 
  protected:
   explicit CapturerTrackSource(
-      std::unique_ptr<webrtc::test::VcmCapturer> capturer)
+      std::unique_ptr<VcmCapturer> capturer)
       : VideoTrackSource(/*remote=*/false), capturer_(std::move(capturer)) {}
 
  private:
   rtc::VideoSourceInterface<webrtc::VideoFrame>* source() override {
     return capturer_.get();
   }
-  std::unique_ptr<webrtc::test::VcmCapturer> capturer_;
+  std::unique_ptr<VcmCapturer> capturer_;
 };
 
 

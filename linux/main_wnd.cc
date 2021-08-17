@@ -8,7 +8,7 @@
  *  be found in the AUTHORS file in the root of the source tree.
  */
 
-#include "examples/voip/linux/main_wnd.h"
+#include "linux/main_wnd.h"
 
 #include <gdk/gdkkeysyms.h>
 #include <gtk/gtk.h>
@@ -17,10 +17,6 @@
 #include "api/video/i420_buffer.h"
 #include "rtc_base/checks.h"
 #include "rtc_base/logging.h"
-//#include "rtc_base/strings/stringutils.h"
-#include "third_party/libyuv/include/libyuv/convert_from.h"
-
-
 #include "api/video/i420_buffer.h"
 #include "api/video/video_frame_buffer.h"
 #include "api/video/video_rotation.h"
@@ -30,9 +26,8 @@
 #include "third_party/libyuv/include/libyuv/convert.h"
 #include "third_party/libyuv/include/libyuv/convert_from.h"
 
-#include "examples/voip/defaults.h"
+#include "defaults.h"
 
-//using rtc::sprintfn;
 
 namespace {
 
