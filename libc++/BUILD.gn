@@ -1,0 +1,94 @@
+import("../webrtc.gni")
+
+config("libc++_include") {
+    include_dirs = ["$webrtc_src_dir/buildtools/third_party/libc++/trunk/include" ]
+}
+
+
+source_set("libc++abi") {
+    sources = [
+        "$webrtc_build_dir/obj/buildtools/third_party/libc++abi/libc++abi/abort_message.o",
+        "$webrtc_build_dir/obj/buildtools/third_party/libc++abi/libc++abi/cxa_aux_runtime.o",
+        "$webrtc_build_dir/obj/buildtools/third_party/libc++abi/libc++abi/cxa_default_handlers.o",
+        "$webrtc_build_dir/obj/buildtools/third_party/libc++abi/libc++abi/cxa_exception.o",
+        "$webrtc_build_dir/obj/buildtools/third_party/libc++abi/libc++abi/cxa_exception_storage.o",
+        "$webrtc_build_dir/obj/buildtools/third_party/libc++abi/libc++abi/cxa_handlers.o",
+         
+        # This file is supposed to be used in fno-exception builds of
+        # libc++abi.  We build lib++/libc++abi with exceptions enabled.
+        #"trunk/src/cxa_noexception.o",
+        "$webrtc_build_dir/obj/buildtools/third_party/libc++abi/libc++abi/cxa_personality.o",
+        "$webrtc_build_dir/obj/buildtools/third_party/libc++abi/libc++abi/cxa_vector.o",
+        "$webrtc_build_dir/obj/buildtools/third_party/libc++abi/libc++abi/cxa_virtual.o",
+        "$webrtc_build_dir/obj/buildtools/third_party/libc++abi/libc++abi/fallback_malloc.o",
+        "$webrtc_build_dir/obj/buildtools/third_party/libc++abi/libc++abi/private_typeinfo.o",
+        "$webrtc_build_dir/obj/buildtools/third_party/libc++abi/libc++abi/stdlib_exception.o",
+        "$webrtc_build_dir/obj/buildtools/third_party/libc++abi/libc++abi/stdlib_stdexcept.o",
+        "$webrtc_build_dir/obj/buildtools/third_party/libc++abi/libc++abi/stdlib_typeinfo.o",
+    ]
+
+    if (!is_tsan) {
+        sources += [ "$webrtc_build_dir/obj/buildtools/third_party/libc++abi/libc++abi/cxa_guard.o" ]
+    }
+
+    # See the comment in cxa_demangle_stub.cc for why we don't use LLVM's
+    # demangler on android.
+    # TODO(thakis): Switch to building with LIBCXXABI_NON_DEMANGLING_TERMINATE
+    # defined instead.
+    if (is_android) {
+      sources += [ "$webrtc_build_dir/obj/buildtools/third_party/libc++abi/libc++abi/cxa_demangle_stub.o" ]
+    } else {
+      sources += [ "$webrtc_build_dir/obj/buildtools/third_party/libc++abi/libc++abi/cxa_demangle.o" ]
+    }
+     
+    if (is_fuchsia || (is_posix && !is_apple)) {
+      sources += [ "$webrtc_build_dir/obj/buildtools/third_party/libc++abi/libc++abi/cxa_thread_atexit.o" ]
+    }
+
+    deps = [ ]
+}
+
+    
+source_set("libc++") {
+    sources = [
+        "$webrtc_build_dir/obj/buildtools/third_party/libc++/libc++/algorithm.o",
+        "$webrtc_build_dir/obj/buildtools/third_party/libc++/libc++/any.o",
+        "$webrtc_build_dir/obj/buildtools/third_party/libc++/libc++/atomic.o",
+        "$webrtc_build_dir/obj/buildtools/third_party/libc++/libc++/barrier.o",
+        "$webrtc_build_dir/obj/buildtools/third_party/libc++/libc++/bind.o",
+        "$webrtc_build_dir/obj/buildtools/third_party/libc++/libc++/charconv.o",
+        "$webrtc_build_dir/obj/buildtools/third_party/libc++/libc++/chrono.o",
+        "$webrtc_build_dir/obj/buildtools/third_party/libc++/libc++/condition_variable.o",
+        "$webrtc_build_dir/obj/buildtools/third_party/libc++/libc++/condition_variable_destructor.o",
+        "$webrtc_build_dir/obj/buildtools/third_party/libc++/libc++/debug.o",
+        "$webrtc_build_dir/obj/buildtools/third_party/libc++/libc++/exception.o",
+        "$webrtc_build_dir/obj/buildtools/third_party/libc++/libc++/functional.o",
+        "$webrtc_build_dir/obj/buildtools/third_party/libc++/libc++/future.o",
+        "$webrtc_build_dir/obj/buildtools/third_party/libc++/libc++/hash.o",
+        "$webrtc_build_dir/obj/buildtools/third_party/libc++/libc++/ios.o",
+        "$webrtc_build_dir/obj/buildtools/third_party/libc++/libc++/ios.instantiations.o",
+        "$webrtc_build_dir/obj/buildtools/third_party/libc++/libc++/iostream.o",
+        "$webrtc_build_dir/obj/buildtools/third_party/libc++/libc++/locale.o",
+        "$webrtc_build_dir/obj/buildtools/third_party/libc++/libc++/memory.o",
+        "$webrtc_build_dir/obj/buildtools/third_party/libc++/libc++/mutex.o",
+        "$webrtc_build_dir/obj/buildtools/third_party/libc++/libc++/mutex_destructor.o",
+        "$webrtc_build_dir/obj/buildtools/third_party/libc++/libc++/new.o",
+        "$webrtc_build_dir/obj/buildtools/third_party/libc++/libc++/optional.o",
+        "$webrtc_build_dir/obj/buildtools/third_party/libc++/libc++/random.o",
+        "$webrtc_build_dir/obj/buildtools/third_party/libc++/libc++/random_shuffle.o",
+        "$webrtc_build_dir/obj/buildtools/third_party/libc++/libc++/regex.o",
+        "$webrtc_build_dir/obj/buildtools/third_party/libc++/libc++/shared_mutex.o",
+        "$webrtc_build_dir/obj/buildtools/third_party/libc++/libc++/stdexcept.o",
+        "$webrtc_build_dir/obj/buildtools/third_party/libc++/libc++/string.o",
+        "$webrtc_build_dir/obj/buildtools/third_party/libc++/libc++/strstream.o",
+        "$webrtc_build_dir/obj/buildtools/third_party/libc++/libc++/system_error.o",
+        "$webrtc_build_dir/obj/buildtools/third_party/libc++/libc++/thread.o",
+        "$webrtc_build_dir/obj/buildtools/third_party/libc++/libc++/typeinfo.o",
+        "$webrtc_build_dir/obj/buildtools/third_party/libc++/libc++/utility.o",
+        "$webrtc_build_dir/obj/buildtools/third_party/libc++/libc++/valarray.o",
+        "$webrtc_build_dir/obj/buildtools/third_party/libc++/libc++/variant.o",
+        "$webrtc_build_dir/obj/buildtools/third_party/libc++/libc++/vector.o",
+    ]
+
+    deps = [ ":libc++abi" ]
+}
